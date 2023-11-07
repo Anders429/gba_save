@@ -2,3 +2,6 @@
 name = "gba_save"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+embedded-io = "0.6.1"

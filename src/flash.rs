@@ -1,5 +1,5 @@
 use crate::mmio::{Cycles, WAITCNT};
-use core::{cmp::min, hint::black_box, ptr, time::Duration};
+use core::{cmp::min, hint::black_box, marker::PhantomData, ptr, time::Duration};
 use embedded_io::Read;
 
 const FLASH_MEMORY: *mut u8 = 0x0e00_0000 as *mut u8;
@@ -118,16 +118,17 @@ impl TryFrom<u16> for Device {
 }
 
 #[derive(Debug)]
-pub struct Reader {
+pub struct Reader<'a> {
     address: *mut u8,
     len: usize,
+    lifetime: PhantomData<&'a ()>,
 }
 
-impl embedded_io::ErrorType for Reader {
+impl embedded_io::ErrorType for Reader<'_> {
     type Error = Error;
 }
 
-impl Read for Reader {
+impl Read for Reader<'_> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         let mut read_count = 0;
         loop {
@@ -243,7 +244,10 @@ impl Flash {
         verify_byte(FLASH_MEMORY, ERASED, Duration::from_millis(20))
     }
 
-    pub fn read(&self, position: usize, len: usize) -> Result<Reader, Error> {
+    pub fn read<'a, 'b>(&'a mut self, position: usize, len: usize) -> Result<Reader<'b>, Error>
+    where
+        'a: 'b,
+    {
         let size = self.device.size();
         size.check_bounds(position, len)?;
 
@@ -259,6 +263,8 @@ impl Flash {
         Ok(Reader {
             address: unsafe { FLASH_MEMORY.add(position) },
             len,
+
+            lifetime: PhantomData,
         })
     }
 }

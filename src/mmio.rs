@@ -2,8 +2,8 @@ use core::mem::transmute;
 
 pub(crate) const WAITCNT: *mut WaitstateControl = 0x0400_0204 as *mut WaitstateControl;
 
-#[repr(u8)]
 #[derive(Debug)]
+#[repr(u8)]
 pub(crate) enum Cycles {
     _4 = 0,
     _3 = 1,

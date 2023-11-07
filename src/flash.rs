@@ -6,11 +6,15 @@ const COMMAND: *mut Command = 0x0e00_5555 as *mut Command;
 const COMMAND_ENABLE: *mut u8 = 0x0e00_2aaa as *mut u8;
 
 const ENABLE: u8 = 0x55;
+const ERASED: u8 = 0xff;
 
+#[derive(Debug)]
 pub enum Error {
     UnknownDeviceId(u16),
+    VerificationFailed,
 }
 
+#[derive(Debug)]
 #[repr(u8)]
 enum Command {
     EraseChip = 0x10,
@@ -24,6 +28,7 @@ enum Command {
 }
 
 /// Different flash chip devices, by ID code.
+#[derive(Debug)]
 enum Device {
     /// Macronix 128K
     MX29L010 = 0x09c2,
@@ -60,6 +65,7 @@ enum Size {
     KB128,
 }
 
+#[derive(Debug)]
 pub struct Flash {
     device: Device,
 }
@@ -70,17 +76,31 @@ fn wait(amount: Duration) {
     }
 }
 
+fn verify_byte(address: *const u8, byte: u8, timeout: Duration) -> Result<(), Error> {
+    let mut i = 0;
+    loop {
+        if unsafe { address.read_volatile() } == byte {
+            return Ok(());
+        }
+        if i >= timeout.as_millis() * 1000 {
+            return Err(Error::VerificationFailed);
+        }
+
+        i += 1;
+    }
+}
+
 fn begin_send_command() {
     unsafe {
-        *COMMAND = Command::Enable;
-        *COMMAND_ENABLE = ENABLE;
+        COMMAND.write_volatile(Command::Enable);
+        COMMAND_ENABLE.write_volatile(ENABLE);
     }
 }
 
 fn send_command(command: Command) {
     begin_send_command();
     unsafe {
-        *COMMAND = command;
+        COMMAND.write_volatile(command);
     }
 }
 
@@ -97,8 +117,8 @@ impl Flash {
         // Read u16 from memory.
         let device = u16::from_ne_bytes(unsafe {
             [
-                FLASH_MEMORY.add(1).read_volatile(),
                 FLASH_MEMORY.read_volatile(),
+                FLASH_MEMORY.add(1).read_volatile(),
             ]
         })
         .try_into()?;
@@ -116,5 +136,13 @@ impl Flash {
         unsafe { WAITCNT.write_volatile(waitstate_control) };
 
         Ok(Self { device })
+    }
+
+    pub fn reset(&mut self) -> Result<(), Error> {
+        send_command(Command::Erase);
+        send_command(Command::EraseChip);
+
+        // Verify.
+        verify_byte(FLASH_MEMORY, ERASED, Duration::from_millis(20))
     }
 }

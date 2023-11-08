@@ -1,6 +1,6 @@
 use crate::mmio::{Cycles, WAITCNT};
 use core::{cmp::min, hint::black_box, marker::PhantomData, ptr, time::Duration};
-use embedded_io::Read;
+use embedded_io::{Read, Write};
 
 const FLASH_MEMORY: *mut u8 = 0x0e00_0000 as *mut u8;
 const BANK_SWITCH: *mut Bank = 0x0e00_0000 as *mut Bank;
@@ -17,6 +17,7 @@ pub enum Error {
     UnknownDeviceID(u16),
     VerificationFailed,
     OutOfBounds(Size),
+    EndOfWriter,
 }
 
 impl embedded_io::Error for Error {
@@ -25,6 +26,7 @@ impl embedded_io::Error for Error {
             Self::UnknownDeviceID(_) => embedded_io::ErrorKind::NotFound,
             Self::VerificationFailed => embedded_io::ErrorKind::TimedOut,
             Self::OutOfBounds(_) => embedded_io::ErrorKind::AddrNotAvailable,
+            Self::EndOfWriter => embedded_io::ErrorKind::WriteZero,
         }
     }
 }
@@ -75,8 +77,13 @@ impl Size {
     }
 }
 
+enum SectorSize {
+    _4KB,
+    _128B,
+}
+
 /// Different flash chip devices, by ID code.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 enum Device {
     /// Macronix 128K
     MX29L010,
@@ -97,6 +104,13 @@ impl Device {
         match self {
             Self::MX29L010 | Self::LE26FV10N1TS => Size::_128KB,
             _ => Size::_64KB,
+        }
+    }
+
+    fn sector_size(&self) -> SectorSize {
+        match self {
+            Self::AT29LV512 => SectorSize::_128B,
+            _ => SectorSize::_4KB,
         }
     }
 }
@@ -149,6 +163,45 @@ impl Read for Reader<'_> {
             }
             read_count += 1;
         }
+    }
+}
+
+pub struct Writer<'a> {
+    address: *mut u8,
+    len: usize,
+    sector_size: SectorSize,
+    lifetime: PhantomData<&'a ()>,
+}
+
+impl embedded_io::ErrorType for Writer<'_> {
+    type Error = Error;
+}
+
+impl Write for Writer<'_> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        let mut write_count = 0;
+        loop {
+            if write_count >= min(buf.len(), self.len) {
+                if self.len == 0 {
+                    return Err(Error::EndOfWriter);
+                }
+                self.address = unsafe { self.address.add(write_count) };
+                self.len -= write_count;
+                return Ok(write_count);
+            }
+
+            let address = unsafe { self.address.add(write_count) };
+            // If we have hit the border between banks, we must switch before writing more.
+            if ptr::eq(address, unsafe { FLASH_MEMORY.add(SIZE_64KB) }) {
+                switch_bank(Bank::_1);
+            }
+
+            todo!()
+        }
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        Ok(())
     }
 }
 
@@ -263,7 +316,36 @@ impl Flash {
         Ok(Reader {
             address: unsafe { FLASH_MEMORY.add(position) },
             len,
+            lifetime: PhantomData,
+        })
+    }
 
+    pub fn write<'a, 'b>(&'a mut self, position: usize, len: usize) -> Result<Writer<'b>, Error> {
+        // I think the actual process for this should be:
+        // 1. Erase a sector
+        // 2. Obtain a writer to somewhere in that sector.
+        // 3. Write to that portion of the sector. The Sector object now keeps track of that write.
+        // 4. If a write is attempted on that portion again, it should fail with an error.
+        // 5. We can keep records of ranges that are available for writes.
+        // 6. Unfortunately, this won't work for 128B sectors, as they have to be written all at once.
+        // 7. We could read the existing data to the buffer if it has already been written to, and then rewrite it all at once.
+
+        let size = self.device.size();
+        size.check_bounds(position, len)?;
+
+        // For 128KB devices, we need to make sure we are in the right bank.
+        if matches!(size, Size::_128KB) {
+            if position >= SIZE_64KB {
+                switch_bank(Bank::_0);
+            } else {
+                switch_bank(Bank::_1);
+            }
+        }
+
+        Ok(Writer {
+            address: unsafe { FLASH_MEMORY.add(position) },
+            len,
+            sector_size: self.device.sector_size(),
             lifetime: PhantomData,
         })
     }

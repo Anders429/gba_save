@@ -4,4 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+deranged = {version = "0.3.9", default-features = false}
 embedded-io = "0.6.1"

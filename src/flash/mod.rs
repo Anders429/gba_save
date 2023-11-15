@@ -33,7 +33,7 @@ enum Command {
     EnterIDMode = 0x90,
     Write = 0xa0,
     SwitchBank = 0xb0,
-    LeaveIDMode = 0xf0,
+    TerminateMode = 0xf0,
     Enable = 0xaa,
 }
 
@@ -323,11 +323,11 @@ impl Flash {
         })
         .try_into()?;
 
-        send_command(Command::LeaveIDMode);
+        send_command(Command::TerminateMode);
         wait(Duration::from_millis(20));
-        // Sanyo 128K device needs to have `LeaveIDMode` command sent twice.
+        // Sanyo 128K device needs to have `TerminateMode` command sent twice.
         if matches!(device, Device::LE26FV10N1TS) {
-            send_command(Command::LeaveIDMode);
+            send_command(Command::TerminateMode);
             wait(Duration::from_millis(20));
         }
 

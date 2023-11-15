@@ -1,7 +1,7 @@
 use crate::{
     flash::{
-        send_command, switch_bank, verify_bytes, Bank, Command, Error, Reader64K, FLASH_MEMORY,
-        SIZE_64KB,
+        send_command, switch_bank, verify_byte, verify_bytes, Bank, Command, Error, Reader64K,
+        FLASH_MEMORY, SIZE_64KB,
     },
     mmio::IME,
 };
@@ -41,12 +41,13 @@ impl Write for Writer64K<'_> {
                 return Ok(write_count);
             }
 
+            let address = unsafe { self.address.add(write_count) };
+            let byte = unsafe { *buf.get_unchecked(write_count) };
             send_command(Command::Write);
             unsafe {
-                self.address
-                    .add(write_count)
-                    .write_volatile(*buf.get_unchecked(write_count));
+                address.write_volatile(byte);
             }
+            verify_byte(address, byte, Duration::from_millis(20))?;
 
             write_count += 1;
         }
@@ -110,10 +111,12 @@ impl Write for Writer128K<'_> {
                 address = unsafe { address.sub(SIZE_64KB) };
             }
 
+            let byte = unsafe { *buf.get_unchecked(write_count) };
             send_command(Command::Write);
             unsafe {
-                address.write_volatile(*buf.get_unchecked(write_count));
+                address.write_volatile(byte);
             }
+            verify_byte(address, byte, Duration::from_millis(20))?;
 
             write_count += 1;
         }

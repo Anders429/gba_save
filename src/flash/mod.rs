@@ -1,7 +1,9 @@
+mod device;
 mod error;
 mod reader;
 mod writer;
 
+pub use device::UnknownDeviceID;
 pub use error::Error;
 pub use reader::{Reader128K, Reader64K};
 pub use writer::{Writer128K, Writer64K, Writer64KAtmel};
@@ -14,6 +16,7 @@ use core::{
     time::Duration,
 };
 use deranged::{RangedU8, RangedUsize};
+use device::Device;
 
 const FLASH_MEMORY: *mut u8 = 0x0e00_0000 as *mut u8;
 const BANK_SWITCH: *mut Bank = 0x0e00_0000 as *mut Bank;
@@ -61,39 +64,6 @@ fn switch_bank(bank: Bank) {
     send_command(Command::SwitchBank);
     unsafe {
         BANK_SWITCH.write_volatile(bank);
-    }
-}
-
-/// Different flash chip devices, by ID code.
-#[derive(Clone, Copy, Debug)]
-enum Device {
-    /// Macronix 128K
-    MX29L010,
-    /// Sanyo
-    LE26FV10N1TS,
-    /// Panasonic
-    MN63F805MNP,
-    /// Macronix 64K
-    MX29L512,
-    /// Atmel
-    AT29LV512,
-    /// SST
-    LE39FW512,
-}
-
-impl TryFrom<u16> for Device {
-    type Error = Error;
-
-    fn try_from(id: u16) -> Result<Self, Self::Error> {
-        match id {
-            0x09c2 => Ok(Device::MX29L010),
-            0x1362 => Ok(Device::LE26FV10N1TS),
-            0x1b32 => Ok(Device::MN63F805MNP),
-            0x1cc2 => Ok(Device::MX29L512),
-            0x3d1f => Ok(Device::AT29LV512),
-            0xd4b4 => Ok(Device::LE39FW512),
-            _ => Err(Error::UnknownDeviceID(id)),
-        }
     }
 }
 
@@ -306,7 +276,7 @@ impl Flash {
     /// # Safety
     /// Must have exclusive ownership of both flash RAM memory and WAITCNT's SRAM wait control
     /// setting for the duration of its lifetime.
-    pub unsafe fn new() -> Result<Self, Error> {
+    pub unsafe fn new() -> Result<Self, UnknownDeviceID> {
         let mut waitstate_control = unsafe { WAITCNT.read_volatile() };
         waitstate_control.set_backup_waitstate(Cycles::_8);
         unsafe { WAITCNT.write_volatile(waitstate_control) };

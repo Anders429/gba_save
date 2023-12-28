@@ -1,3 +1,51 @@
+//! Flash backup memory.
+//!
+//! The GBA has three different variants of flash backup:
+//! - 64KiB
+//! - 64KiB Atmel
+//! - 128KiB
+//!
+//! Each of these backup types are interacted with in slightly different ways. Therefore, they are
+//! treated separately by this library.
+//!
+//! To interact with flash backup memory, initialize using [`Flash::new()`]. This will provide the
+//! variant of the found flash type for you to interact with.
+//!
+//! ```
+//! use gba_save::flash::Flash;
+//!
+//! let flash = unsafe { Flash::new() }.expect("flash not available");
+//! match flash {
+//!     Flash::Flash64K(flash_64k) => {
+//!         // Read, write, etc.
+//!     }
+//!     Flash::Flash64KAtmel(flash_64k_atmel) => {
+//!         // Read, write, etc.
+//!     }
+//!     Flash::Flash128K(flash_128k) => {
+//!         // Read, write, etc.
+//!     }
+//! }
+//! ```
+//!
+//! If only a subset of flash variants are to be supported, simply handle the unsupported cases as
+//! errors. For example, if only 128KiB flash is to be supported, we interact with the flash chip
+//! on only that case:
+//!
+//! ```
+//! use gba_save::flash::Flash;
+//!
+//! let flash = unsafe { Flash::new() }.expect("flash not available");
+//! match flash {
+//!     Flash::Flash128K(flash_128k) => {
+//!         // Read, write, etc.
+//!     }
+//!     _ => panic!("unsupported flash type"),
+//! }
+//! ```
+//!
+//! [`Flash::new()`]: Flash::new()
+
 mod device;
 mod error;
 mod reader;
@@ -160,10 +208,15 @@ where
     })
 }
 
+/// A flash device with 64KiB of storage.
+///
+/// This storage type is divided into 16 4KiB sectors. Each sector must be erased before it can be
+/// written to. Failing to erase a sector will result in invalid data.
 #[derive(Debug)]
 pub struct Flash64K;
 
 impl Flash64K {
+    /// Returns a reader over the given range.
     pub fn reader<'a, 'b, Range>(&'a mut self, range: Range) -> Reader64K<'b>
     where
         'a: 'b,
@@ -173,6 +226,10 @@ impl Flash64K {
         unsafe { Reader64K::new_unchecked(address, len) }
     }
 
+    /// Erases the specified sectors.
+    ///
+    /// This should be called before attempting to write to these sectors. Memory that has already
+    /// been written to cannot be written to again without first being erased.
     pub fn erase_sectors<Range>(&mut self, sectors: Range) -> Result<(), Error>
     where
         Range: RangeBounds<RangedU8<0, 15>>,
@@ -183,6 +240,7 @@ impl Flash64K {
         Ok(())
     }
 
+    /// Returns a writer over the given range.
     pub fn writer<'a, 'b, Range>(&'a mut self, range: Range) -> Writer64K<'b>
     where
         'a: 'b,
@@ -193,10 +251,16 @@ impl Flash64K {
     }
 }
 
+/// A flash device with 64KiB of storage manufactured by Atmel.
+///
+/// These devices are handled separately, as they do not require users to manage erasing of
+/// sectors. Instead, they can be written to directly, as the sector size is small enough to fit
+/// into an internal buffer.
 #[derive(Debug)]
 pub struct Flash64KAtmel;
 
 impl Flash64KAtmel {
+    /// Returns a reader over the given range.
     pub fn reader<'a, 'b, Range>(&'a mut self, range: Range) -> Reader64K<'b>
     where
         'a: 'b,
@@ -206,6 +270,7 @@ impl Flash64KAtmel {
         unsafe { Reader64K::new_unchecked(address, len) }
     }
 
+    /// Returns a writer over the given range.
     pub fn writer<'a, 'b, Range>(&'a mut self, range: Range) -> Writer64KAtmel<'b>
     where
         'a: 'b,
@@ -216,10 +281,15 @@ impl Flash64KAtmel {
     }
 }
 
+/// A flash device with 128KiB of storage.
+///
+/// This storage type is divided into 32 4KiB sectors. Each sector must be erased before it can be
+/// written to. Failing to erase a sector will result in invalid data.
 #[derive(Debug)]
 pub struct Flash128K;
 
 impl Flash128K {
+    /// Returns a reader over the given range.
     pub fn reader<'a, 'b, Range>(&'a mut self, range: Range) -> Reader128K<'b>
     where
         'a: 'b,
@@ -229,6 +299,10 @@ impl Flash128K {
         unsafe { Reader128K::new_unchecked(address, len) }
     }
 
+    /// Erases the specified sectors.
+    ///
+    /// This should be called before attempting to write to these sectors. Memory that has already
+    /// been written to cannot be written to again without first being erased.
     pub fn erase_sectors<Range>(&mut self, sectors: Range) -> Result<(), Error>
     where
         Range: RangeBounds<RangedU8<0, 31>>,
@@ -255,6 +329,7 @@ impl Flash128K {
         Ok(())
     }
 
+    /// Returns a writer over the given range.
     pub fn writer<'a, 'b, Range>(&'a mut self, range: Range) -> Writer128K<'b>
     where
         'a: 'b,
@@ -265,14 +340,53 @@ impl Flash128K {
     }
 }
 
+/// The currently available flash backup device.
+///
+/// The GBA has three different variants of flash backup:
+/// - 64KiB
+/// - 64KiB Atmel
+/// - 128KiB
+///
+/// Each of these backup types are interacted with in slightly different ways. Therefore, they are
+/// treated separately by this library. This type contains the variant of the currently available
+/// flash device. Users should match on the variants of this type and provide specific behavior for
+/// each supported variant.
+///
+/// # Example
+/// ```
+/// use gba_save::flash::Flash;
+///
+/// let flash = unsafe { Flash::new() }.expect("flash not available");
+/// match flash {
+///     Flash::Flash64K(flash_64k) => {
+///         // Read, write, etc.
+///     }
+///     Flash::Flash64KAtmel(flash_64k_atmel) => {
+///         // Read, write, etc.
+///     }
+///     Flash::Flash128K(flash_128k) => {
+///         // Read, write, etc.
+///     }
+/// }
+/// ```
 #[derive(Debug)]
 pub enum Flash {
+    /// 64KiB flash memory.
     Flash64K(Flash64K),
+    /// 64KiB flash memory manufactured by Atmel.
+    ///
+    /// This case is handled separately, as Atmel chips have different sector sizes than other
+    /// devices.
     Flash64KAtmel(Flash64KAtmel),
+    /// 128KiB flash memory.
     Flash128K(Flash128K),
 }
 
 impl Flash {
+    /// Returns the variant of the currently available flash device.
+    ///
+    /// This is the starting point for interacting with the flash backup.
+    ///
     /// # Safety
     /// Must have exclusive ownership of both flash RAM memory and WAITCNT's SRAM wait control
     /// setting for the duration of its lifetime.
@@ -308,6 +422,7 @@ impl Flash {
         }
     }
 
+    /// Erase the entirety of the flash backup memory.
     pub fn reset(&mut self) -> Result<(), Error> {
         send_command(Command::Erase);
         send_command(Command::EraseChip);

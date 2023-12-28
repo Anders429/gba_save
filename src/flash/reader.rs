@@ -2,6 +2,9 @@ use crate::flash::{switch_bank, Bank, FLASH_MEMORY, SIZE_64KB};
 use core::{cmp::min, convert::Infallible, marker::PhantomData, ptr};
 use embedded_io::{ErrorType, Read};
 
+/// A reader on a 64KiB flash device.
+///
+/// This type allows reading data over the range specified upon creation.
 #[derive(Debug)]
 pub struct Reader64K<'a> {
     address: *mut u8,
@@ -41,6 +44,9 @@ impl Read for Reader64K<'_> {
     }
 }
 
+/// A reader on a 128KiB flash device.
+///
+/// This type allows reading data over the range specified upon creation.
 #[derive(Debug)]
 pub struct Reader128K<'a> {
     address: *mut u8,

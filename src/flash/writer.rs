@@ -8,6 +8,12 @@ use crate::{
 use core::{cmp::min, marker::PhantomData, ptr, time::Duration};
 use embedded_io::{ErrorType, Read, Write};
 
+/// A writer on a 64KiB flash device.
+///
+/// This type allows writing data on the range specified upon creation.
+///
+/// If the memory being written to has been written to previously without being erased, the writes
+/// will not succeed.
 pub struct Writer64K<'a> {
     address: *mut u8,
     len: usize,
@@ -58,6 +64,12 @@ impl Write for Writer64K<'_> {
     }
 }
 
+/// A writer on a 128KiB flash device.
+///
+/// This type allows writing data on the range specified upon creation.
+///
+/// If the memory being written to has been written to previously without being erased, the writes
+/// will not succeed.
 pub struct Writer128K<'a> {
     address: *mut u8,
     len: usize,
@@ -127,6 +139,9 @@ impl Write for Writer128K<'_> {
     }
 }
 
+/// A writer on a 64KiB Atmel flash device.
+///
+/// This type allows writing data on the range specified upon creation.
 pub struct Writer64KAtmel<'a> {
     address: *mut u8,
     len: usize,

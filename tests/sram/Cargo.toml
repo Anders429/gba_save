@@ -1,0 +1,12 @@
+[package]
+name = "sram"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+deranged = {version = "0.3.10", default-features = false}
+embedded-io = "0.6.1"
+gba = "0.11.3"
+gba_save = {path = "../.."}
+log = "0.4.20"
+mgba_log = "0.2.1"

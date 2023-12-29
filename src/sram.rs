@@ -9,6 +9,9 @@ use embedded_io::{ErrorKind, ErrorType, Read, Write};
 
 const SRAM_MEMORY: *mut u8 = 0x0e00_0000 as *mut u8;
 
+/// A reader on SRAM.
+///
+/// This type allows reading data over the range specified upon creation.
 pub struct Reader<'a> {
     address: *mut u8,
     len: usize,
@@ -47,9 +50,16 @@ impl Read for Reader<'_> {
     }
 }
 
+/// An error that can occur when writing to flash memory.
 #[derive(Debug)]
 pub enum Error {
+    /// Data written was unable to be verified.
     WriteFailure,
+
+    /// The writer has exhausted all of its space.
+    ///
+    /// This indicates that the range provided when creating the writer has been completely
+    /// exhausted.
     EndOfWriter,
 }
 
@@ -70,6 +80,9 @@ fn verify_byte(address: *const u8, byte: u8) -> Result<(), Error> {
     }
 }
 
+/// A writer on SRAM.
+///
+/// This type allows writing data on the range specified upon creation.
 pub struct Writer<'a> {
     address: *mut u8,
     len: usize,
@@ -137,6 +150,7 @@ where
     (address, len)
 }
 
+/// Access to SRAM backup.
 pub struct Sram {
     /// As this struct maintains ownership of SRAM memory and WAITCNT's SRAM wait control setting,
     /// we want to make sure it can only be constructed through its `unsafe` `new()` associated
@@ -145,6 +159,8 @@ pub struct Sram {
 }
 
 impl Sram {
+    /// Creates an accessor to the SRAM backup.
+    ///
     /// # Safety
     /// Must have exclusive ownership of both SRAM memory and WAITCNT’s SRAM wait control setting
     /// for the duration of its lifetime.
@@ -152,6 +168,7 @@ impl Sram {
         Self { _private: () }
     }
 
+    /// Returns a reader over the given range.
     pub fn reader<'a, 'b, Range>(&'a self, range: Range) -> Reader<'b>
     where
         Range: RangeBounds<RangedUsize<0, 32767>>,
@@ -161,6 +178,7 @@ impl Sram {
         unsafe { Reader::new_unchecked(address, len) }
     }
 
+    /// Returns a writer over the given range.
     pub fn writer<'a, 'b, Range>(&'a mut self, range: Range) -> Writer<'b>
     where
         Range: RangeBounds<RangedUsize<0, 32767>>,

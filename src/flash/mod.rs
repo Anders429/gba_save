@@ -11,7 +11,7 @@
 //! To interact with flash backup memory, initialize using [`Flash::new()`]. This will provide the
 //! variant of the found flash type for you to interact with.
 //!
-//! ```
+//! ``` no_run
 //! use gba_save::flash::Flash;
 //!
 //! let flash = unsafe { Flash::new() }.expect("flash not available");
@@ -32,7 +32,7 @@
 //! errors. For example, if only 128KiB flash is to be supported, we interact with the flash chip
 //! on only that case:
 //!
-//! ```
+//! ``` no_run
 //! use gba_save::flash::Flash;
 //!
 //! let flash = unsafe { Flash::new() }.expect("flash not available");
@@ -353,7 +353,7 @@ impl Flash128K {
 /// each supported variant.
 ///
 /// # Example
-/// ```
+/// ``` no_run
 /// use gba_save::flash::Flash;
 ///
 /// let flash = unsafe { Flash::new() }.expect("flash not available");

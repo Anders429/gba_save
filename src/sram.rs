@@ -51,7 +51,7 @@ impl Read for Reader<'_> {
 }
 
 /// An error that can occur when writing to flash memory.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Error {
     /// Data written was unable to be verified.
     WriteFailure,
@@ -186,5 +186,90 @@ impl Sram {
     {
         let (address, len) = translate_range_to_buffer(range);
         unsafe { Writer::new_unchecked(address, len) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Error, Sram};
+    use claims::{assert_err_eq, assert_ok_eq};
+    use deranged::RangedUsize;
+    use embedded_io::{Read, Write};
+    use gba_test::test;
+
+    #[test]
+    fn empty_range_read() {
+        let sram = unsafe { Sram::new() };
+        let mut reader =
+            sram.reader(RangedUsize::new_static::<0>()..RangedUsize::new_static::<0>());
+
+        let mut buf = [1, 2, 3, 4];
+        assert_ok_eq!(reader.read(&mut buf), 0);
+        assert_eq!(buf, [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn empty_range_write() {
+        let mut sram = unsafe { Sram::new() };
+        let mut writer =
+            sram.writer(RangedUsize::new_static::<0>()..RangedUsize::new_static::<0>());
+
+        assert_err_eq!(writer.write(&[0]), Error::EndOfWriter);
+    }
+
+    #[test]
+    fn full_range() {
+        let mut sram = unsafe { Sram::new() };
+        let mut writer = sram.writer(..);
+
+        for i in 0..8192 {
+            assert_ok_eq!(
+                writer.write(&[
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8)
+                ]),
+                4
+            );
+        }
+
+        let mut reader = sram.reader(..);
+        let mut buf = [0, 0, 0, 0];
+
+        for i in 0..8192 {
+            assert_ok_eq!(reader.read(&mut buf), 4);
+            assert_eq!(
+                buf,
+                [
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8)
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn partial_range() {
+        let mut sram = unsafe { Sram::new() };
+        let mut writer =
+            sram.writer(RangedUsize::new_static::<42>()..RangedUsize::new_static::<100>());
+
+        assert_ok_eq!(writer.write(&[b'a'; 100]), 58);
+
+        let mut reader =
+            sram.reader(RangedUsize::new_static::<51>()..RangedUsize::new_static::<60>());
+        let mut buf = [0; 20];
+
+        assert_ok_eq!(reader.read(&mut buf), 9);
+        assert_eq!(
+            buf,
+            [
+                b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0
+            ]
+        );
     }
 }

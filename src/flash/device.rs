@@ -8,11 +8,11 @@
 /// and therefore cannot know how to interact with it.
 ///
 /// [`Flash`]: gba_save::flash::Flash
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct UnknownDeviceID(pub(crate) u16);
 
 /// Different flash chip devices, by ID code.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Device {
     /// Macronix 128K
     MX29L010,
@@ -41,5 +41,49 @@ impl TryFrom<u16> for Device {
             0xd4b4 => Ok(Device::LE39FW512),
             _ => Err(UnknownDeviceID(id)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(non_snake_case)]
+
+    use super::{Device, UnknownDeviceID};
+    use claims::{assert_err_eq, assert_ok_eq};
+    use gba_test::test;
+
+    #[test]
+    fn device_from_MX29L010() {
+        assert_ok_eq!(Device::try_from(0x09c2), Device::MX29L010);
+    }
+
+    #[test]
+    fn device_from_LE26FV10N1TS() {
+        assert_ok_eq!(Device::try_from(0x1362), Device::LE26FV10N1TS);
+    }
+
+    #[test]
+    fn device_from_MN63F805MNP() {
+        assert_ok_eq!(Device::try_from(0x1b32), Device::MN63F805MNP);
+    }
+
+    #[test]
+    fn device_from_MX29L512() {
+        assert_ok_eq!(Device::try_from(0x1cc2), Device::MX29L512);
+    }
+
+    #[test]
+    fn device_from_AT29LV512() {
+        assert_ok_eq!(Device::try_from(0x3d1f), Device::AT29LV512);
+    }
+
+    #[test]
+    fn device_from_LE39FW512() {
+        assert_ok_eq!(Device::try_from(0xd4b4), Device::LE39FW512);
+    }
+
+    #[test]
+    fn device_from_unknown() {
+        assert_err_eq!(Device::try_from(0xffff), UnknownDeviceID(0xffff));
     }
 }

@@ -21,3 +21,20 @@ impl embedded_io::Error for Error {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+    use embedded_io::{Error as _, ErrorKind};
+    use gba_test::test;
+
+    #[test]
+    fn operation_timed_out_kind() {
+        assert_eq!(Error::OperationTimedOut.kind(), ErrorKind::TimedOut);
+    }
+
+    #[test]
+    fn end_of_writer_kind() {
+        assert_eq!(Error::EndOfWriter.kind(), ErrorKind::WriteZero);
+    }
+}

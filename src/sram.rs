@@ -1,3 +1,4 @@
+use crate::mmio::{Cycles, WAITCNT};
 use core::{
     cmp::min,
     convert::Infallible,
@@ -165,6 +166,10 @@ impl Sram {
     /// Must have exclusive ownership of both SRAM memory and WAITCNT’s SRAM wait control setting
     /// for the duration of its lifetime.
     pub unsafe fn new() -> Self {
+        let mut waitstate_control = unsafe { WAITCNT.read_volatile() };
+        waitstate_control.set_backup_waitstate(Cycles::_8);
+        unsafe { WAITCNT.write_volatile(waitstate_control) };
+
         Self { _private: () }
     }
 

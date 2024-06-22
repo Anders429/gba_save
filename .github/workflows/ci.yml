@@ -44,7 +44,7 @@ jobs:
     - run: sudo apt-get install binutils-arm-none-eabi
     - run: cargo test --no-run --message-format=json | tee results.json
       env:
-        RUSTLAGS: -Clinker=arm-none-eabi-ld -Clink-arg=-Tgba.ld -Ztrap-unreachable=no --cfg sram
+        RUSTFLAGS: -Clinker=arm-none-eabi-ld -Clink-arg=-Tgba.ld -Ztrap-unreachable=no --cfg sram
     - run: cargo install parse_test_executable
     - run: echo "ROM_PATH=$(parse_test_executable results.json)" >> $GITHUB_ENV
     - run: arm-none-eabi-objcopy -O binary ${{ env.ROM_PATH }} test.gba
@@ -69,7 +69,7 @@ jobs:
     - run: sudo apt-get install binutils-arm-none-eabi
     - run: cargo test --no-run --message-format=json | tee results.json
       env:
-        RUSTLAGS: -Clinker=arm-none-eabi-ld -Clink-arg=-Tgba.ld -Ztrap-unreachable=no --cfg flash_64k
+        RUSTFLAGS: -Clinker=arm-none-eabi-ld -Clink-arg=-Tgba.ld -Ztrap-unreachable=no --cfg flash_64k
     - run: cargo install parse_test_executable
     - run: echo "ROM_PATH=$(parse_test_executable results.json)" >> $GITHUB_ENV
     - run: arm-none-eabi-objcopy -O binary ${{ env.ROM_PATH }} test.gba
@@ -94,7 +94,7 @@ jobs:
     - run: sudo apt-get install binutils-arm-none-eabi
     - run: cargo test --no-run --message-format=json | tee results.json
       env:
-        RUSTLAGS: -Clinker=arm-none-eabi-ld -Clink-arg=-Tgba.ld -Ztrap-unreachable=no --cfg flash_128k
+        RUSTFLAGS: -Clinker=arm-none-eabi-ld -Clink-arg=-Tgba.ld -Ztrap-unreachable=no --cfg flash_128k
     - run: cargo install parse_test_executable
     - run: echo "ROM_PATH=$(parse_test_executable results.json)" >> $GITHUB_ENV
     - run: arm-none-eabi-objcopy -O binary ${{ env.ROM_PATH }} test.gba

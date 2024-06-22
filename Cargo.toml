@@ -19,3 +19,6 @@ claims = "0.7.1"
 gba_test = {version = "0.1.3", features = ["log"]}
 mgba_log = "0.2.1"
 more_ranges = "0.1.0"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(sram)", "cfg(flash_64k)", "cfg(flash_128k)"]}

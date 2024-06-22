@@ -431,3 +431,28 @@ impl Flash {
         verify_byte(FLASH_MEMORY, ERASED, Duration::from_millis(20))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Flash;
+    use claims::assert_matches;
+    use gba_test::test;
+
+    #[test]
+    #[cfg_attr(
+        not(flash_64k),
+        ignore = "This test requires a Flash 64KiB chip. Ensure Flash 64KiB is configured and pass `-cfg flash_64k` to enable."
+    )]
+    fn new_64k() {
+        assert_matches!(unsafe { Flash::new() }, Ok(Flash::Flash64K(_)));
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_128k),
+        ignore = "This test requires a Flash 128KiB chip. Ensure Flash 128KiB is configured and pass `-cfg flash_128k` to enable."
+    )]
+    fn new_128k() {
+        assert_matches!(unsafe { Flash::new() }, Ok(Flash::Flash128K(_)));
+    }
+}

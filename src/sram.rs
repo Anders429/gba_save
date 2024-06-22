@@ -287,7 +287,7 @@ mod tests {
     #[test]
     #[cfg_attr(
         not(sram),
-        ignore = "This test requires an SRAM chip. Ensure SRAM is configured and pass `-cfg sram` to enable."
+        ignore = "This test requires an SRAM chip. Ensure SRAM is configured and pass `--cfg sram` to enable."
     )]
     fn empty_range_read() {
         let sram = unsafe { Sram::new() };
@@ -302,7 +302,7 @@ mod tests {
     #[test]
     #[cfg_attr(
         not(sram),
-        ignore = "This test requires an SRAM chip. Ensure SRAM is configured and pass `-cfg sram` to enable."
+        ignore = "This test requires an SRAM chip. Ensure SRAM is configured and pass `--cfg sram` to enable."
     )]
     fn empty_range_write() {
         let mut sram = unsafe { Sram::new() };
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     #[cfg_attr(
         not(sram),
-        ignore = "This test requires an SRAM chip. Ensure SRAM is configured and pass `-cfg sram` to enable."
+        ignore = "This test requires an SRAM chip. Ensure SRAM is configured and pass `--cfg sram` to enable."
     )]
     fn full_range() {
         let mut sram = unsafe { Sram::new() };
@@ -353,7 +353,7 @@ mod tests {
     #[test]
     #[cfg_attr(
         not(sram),
-        ignore = "This test requires an SRAM chip. Ensure SRAM is configured and pass `-cfg sram` to enable."
+        ignore = "This test requires an SRAM chip. Ensure SRAM is configured and pass `--cfg sram` to enable."
     )]
     fn partial_range() {
         let mut sram = unsafe { Sram::new() };
@@ -374,5 +374,17 @@ mod tests {
                 0
             ]
         );
+    }
+
+    #[test]
+    #[cfg_attr(
+        sram,
+        ignore = "This test cannot be run with an SRAM chip. Ensure SRAM is not configured and do not pass `--cfg sram` to enable."
+    )]
+    fn write_failure() {
+        let mut sram = unsafe { Sram::new() };
+        let mut writer = sram.writer(..);
+
+        assert_err_eq!(writer.write(b"hello, world!"), Error::WriteFailure);
     }
 }

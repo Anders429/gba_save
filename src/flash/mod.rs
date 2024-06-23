@@ -180,7 +180,7 @@ where
 {
     let offset = match range.start_bound() {
         Bound::Included(start) => start.get(),
-        Bound::Excluded(start) => start.get().saturating_sub(1),
+        Bound::Excluded(start) => start.get() + 1,
         Bound::Unbounded => 0,
     };
     let address = unsafe { FLASH_MEMORY.add(offset) };
@@ -199,7 +199,7 @@ where
     #[allow(unused_parens)] // Doesn't compile without the parenthesis.
     (match range.start_bound() {
         Bound::Included(start) => start.get(),
-        Bound::Excluded(start) => start.get().saturating_sub(1),
+        Bound::Excluded(start) => start.get() + 1,
         Bound::Unbounded => 0,
     }..match range.end_bound() {
         Bound::Included(end) => end.get() + 1,
@@ -434,9 +434,36 @@ impl Flash {
 
 #[cfg(test)]
 mod tests {
-    use super::Flash;
-    use claims::assert_matches;
+    use super::{wait, Error, Flash, UnknownDeviceID};
+    use claims::{assert_err_eq, assert_ok, assert_ok_eq};
+    use core::time::Duration;
+    use deranged::RangedUsize;
+    use embedded_io::{Read, Write};
     use gba_test::test;
+
+    macro_rules! assert_flash_64k {
+        ($expr:expr) => {
+            match $expr {
+                Flash::Flash64K(flash_64k) => flash_64k,
+                flash => panic!(
+                    "assertion failed, expected Flash::Flash64K(..), got {:?}",
+                    flash
+                ),
+            }
+        };
+    }
+
+    macro_rules! assert_flash_128k {
+        ($expr:expr) => {
+            match $expr {
+                Flash::Flash128K(flash_128k) => flash_128k,
+                flash => panic!(
+                    "assertion failed, expected Flash::Flash129K(..), got {:?}",
+                    flash
+                ),
+            }
+        };
+    }
 
     #[test]
     #[cfg_attr(
@@ -444,7 +471,116 @@ mod tests {
         ignore = "This test requires a Flash 64KiB chip. Ensure Flash 64KiB is configured and pass `--cfg flash_64k` to enable."
     )]
     fn new_64k() {
-        assert_matches!(unsafe { Flash::new() }, Ok(Flash::Flash64K(_)));
+        assert_flash_64k!(assert_ok!(unsafe { Flash::new() }));
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_64k),
+        ignore = "This test requires a Flash 64KiB chip. Ensure Flash 64KiB is configured and pass `--cfg flash_64k` to enable."
+    )]
+    fn empty_range_read_64k() {
+        let mut flash = assert_flash_64k!(assert_ok!(unsafe { Flash::new() }));
+        let mut buffer = [1, 2, 3, 4];
+
+        assert_ok_eq!(
+            flash
+                .reader(RangedUsize::new_static::<0>()..RangedUsize::new_static::<0>())
+                .read(&mut buffer),
+            0
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_64k),
+        ignore = "This test requires a Flash 64KiB chip. Ensure Flash 64KiB is configured and pass `--cfg flash_64k` to enable."
+    )]
+    fn empty_range_write_64k() {
+        let mut flash = assert_flash_64k!(assert_ok!(unsafe { Flash::new() }));
+
+        assert_err_eq!(
+            flash
+                .writer(RangedUsize::new_static::<0>()..RangedUsize::new_static::<0>())
+                .write(&[1, 2, 3, 4]),
+            Error::EndOfWriter
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_64k),
+        ignore = "This test requires a Flash 64KiB chip. Ensure Flash 64KiB is configured and pass `--cfg flash_64k` to enable."
+    )]
+    fn full_range_64k() {
+        let mut flash = assert_ok!(unsafe { Flash::new() });
+        assert_ok!(flash.reset());
+        let mut flash_64k = assert_flash_64k!(flash);
+        let mut writer = flash_64k.writer(..);
+
+        for i in 0..16384 {
+            assert_ok_eq!(
+                writer.write(&[
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8)
+                ]),
+                4
+            );
+        }
+
+        // Wait for the data to be available.
+        wait(Duration::from_millis(1));
+
+        let mut reader = flash_64k.reader(..);
+        let mut buf = [0, 0, 0, 0];
+
+        for i in 0..16384 {
+            assert_ok_eq!(reader.read(&mut buf), 4);
+            assert_eq!(
+                buf,
+                [
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8)
+                ],
+                "i: {}",
+                i
+            );
+        }
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_64k),
+        ignore = "This test requires a Flash 64KiB chip. Ensure Flash 64KiB is configured and pass `--cfg flash_64k` to enable."
+    )]
+    fn partial_range_64k() {
+        let mut flash = assert_ok!(unsafe { Flash::new() });
+        assert_ok!(flash.reset());
+        let mut flash_64k = assert_flash_64k!(flash);
+        let mut writer =
+            flash_64k.writer(RangedUsize::new_static::<42>()..RangedUsize::new_static::<100>());
+
+        assert_ok_eq!(writer.write(&[b'a'; 100]), 58);
+
+        // Wait for the data to be available.
+        wait(Duration::from_millis(1));
+
+        let mut reader =
+            flash_64k.reader(RangedUsize::new_static::<51>()..RangedUsize::new_static::<60>());
+        let mut buf = [0; 20];
+
+        assert_ok_eq!(reader.read(&mut buf), 9);
+        assert_eq!(
+            buf,
+            [
+                b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0
+            ]
+        );
     }
 
     #[test]
@@ -453,6 +589,124 @@ mod tests {
         ignore = "This test requires a Flash 128KiB chip. Ensure Flash 128KiB is configured and pass `--cfg flash_128k` to enable."
     )]
     fn new_128k() {
-        assert_matches!(unsafe { Flash::new() }, Ok(Flash::Flash128K(_)));
+        assert_flash_128k!(assert_ok!(unsafe { Flash::new() }));
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_128k),
+        ignore = "This test requires a Flash 128KiB chip. Ensure Flash 128KiB is configured and pass `--cfg flash_128k` to enable."
+    )]
+    fn empty_range_read_128k() {
+        let mut flash = assert_flash_128k!(assert_ok!(unsafe { Flash::new() }));
+        let mut buffer = [1, 2, 3, 4];
+
+        assert_ok_eq!(
+            flash
+                .reader(RangedUsize::new_static::<0>()..RangedUsize::new_static::<0>())
+                .read(&mut buffer),
+            0
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_128k),
+        ignore = "This test requires a Flash 128KiB chip. Ensure Flash 128KiB is configured and pass `--cfg flash_128k` to enable."
+    )]
+    fn empty_range_write_128k() {
+        let mut flash = assert_flash_128k!(assert_ok!(unsafe { Flash::new() }));
+
+        assert_err_eq!(
+            flash
+                .writer(RangedUsize::new_static::<0>()..RangedUsize::new_static::<0>())
+                .write(&[1, 2, 3, 4]),
+            Error::EndOfWriter
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_128k),
+        ignore = "This test requires a Flash 128KiB chip. Ensure Flash 128KiB is configured and pass `--cfg flash_128k` to enable."
+    )]
+    fn full_range_128k() {
+        let mut flash = assert_ok!(unsafe { Flash::new() });
+        assert_ok!(flash.reset());
+        let mut flash_128k = assert_flash_128k!(flash);
+        let mut writer = flash_128k.writer(..);
+
+        for i in 0..32768 {
+            assert_ok_eq!(
+                writer.write(&[
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8)
+                ]),
+                4
+            );
+        }
+
+        // Wait for the data to be available.
+        wait(Duration::from_millis(1));
+
+        let mut reader = flash_128k.reader(..);
+        let mut buf = [0, 0, 0, 0];
+
+        for i in 0..32768 {
+            assert_ok_eq!(reader.read(&mut buf), 4);
+            assert_eq!(
+                buf,
+                [
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8)
+                ],
+                "i: {}",
+                i
+            );
+        }
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_128k),
+        ignore = "This test requires a Flash 128KiB chip. Ensure Flash 128KiB is configured and pass `--cfg flash_128k` to enable."
+    )]
+    fn partial_range_128k() {
+        let mut flash = assert_ok!(unsafe { Flash::new() });
+        assert_ok!(flash.reset());
+        let mut flash_128k = assert_flash_128k!(flash);
+        let mut writer =
+            flash_128k.writer(RangedUsize::new_static::<42>()..RangedUsize::new_static::<100>());
+
+        assert_ok_eq!(writer.write(&[b'a'; 100]), 58);
+
+        // Wait for the data to be available.
+        wait(Duration::from_millis(1));
+
+        let mut reader =
+            flash_128k.reader(RangedUsize::new_static::<51>()..RangedUsize::new_static::<60>());
+        let mut buf = [0; 20];
+
+        assert_ok_eq!(reader.read(&mut buf), 9);
+        assert_eq!(
+            buf,
+            [
+                b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0
+            ]
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
+        any(flash_64k, flash_128k),
+        ignore = "This test cannot be run with a Flash chip. Ensure Flash is not configured and do not pass `--cfg flash_64k` or `--cfg flash_128k` to enable."
+    )]
+    fn new_unknown() {
+        assert_err_eq!(unsafe { Flash::new() }, UnknownDeviceID(0xffff));
     }
 }

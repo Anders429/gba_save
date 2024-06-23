@@ -1,7 +1,7 @@
 use embedded_io::ErrorKind;
 
 /// An error that can occur when writing to flash memory.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Error {
     /// The write operation did not complete successfully within the device's timeout window.
     OperationTimedOut,

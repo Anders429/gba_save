@@ -9,7 +9,7 @@
 ///
 /// [`Flash`]: gba_save::flash::Flash
 #[derive(Debug, Eq, PartialEq)]
-pub struct UnknownDeviceID(pub(crate) u16);
+pub struct UnknownDeviceID(pub u16);
 
 /// Different flash chip devices, by ID code.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

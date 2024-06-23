@@ -709,4 +709,15 @@ mod tests {
     fn new_unknown() {
         assert_err_eq!(unsafe { Flash::new() }, UnknownDeviceID(0xffff));
     }
+
+    #[test]
+    #[cfg_attr(
+        all(not(flash_64k), not(flash_128k)),
+        ignore = "This test requires a Flash chip. Ensure Flash is configured and pass `--cfg flash_64k` or `--cfg flash_128k` to enable."
+    )]
+    fn reset() {
+        let mut flash = assert_ok!(unsafe { Flash::new() });
+
+        assert_ok!(flash.reset());
+    }
 }

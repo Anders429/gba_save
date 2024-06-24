@@ -437,7 +437,7 @@ mod tests {
     use super::{wait, Error, Flash, UnknownDeviceID};
     use claims::{assert_err_eq, assert_ok, assert_ok_eq};
     use core::time::Duration;
-    use deranged::RangedUsize;
+    use deranged::{RangedU8, RangedUsize};
     use embedded_io::{Read, Write};
     use gba_test::test;
 
@@ -546,8 +546,6 @@ mod tests {
                     2u8.wrapping_add(i as u8),
                     3u8.wrapping_add(i as u8)
                 ],
-                "i: {}",
-                i
             );
         }
     }
@@ -581,6 +579,65 @@ mod tests {
                 0
             ]
         );
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_64k),
+        ignore = "This test requires a Flash 64KiB chip. Ensure Flash 64KiB is configured and pass `--cfg flash_64k` to enable."
+    )]
+    fn erase_one_sector_64k() {
+        let mut flash = assert_ok!(unsafe { Flash::new() });
+        assert_ok!(flash.reset());
+        let mut flash_64k = assert_flash_64k!(flash);
+        // Write some data to it.
+        let mut writer = flash_64k.writer(..RangedUsize::new_static::<13>());
+        assert_ok_eq!(writer.write(b"hello, world!"), 13);
+
+        assert_ok!(
+            flash_64k.erase_sectors(RangedU8::new_static::<0>()..RangedU8::new_static::<1>())
+        );
+
+        let mut reader =
+            flash_64k.reader(RangedUsize::new_static::<0>()..RangedUsize::new_static::<13>());
+        let mut buf = [0; 13];
+
+        assert_ok_eq!(reader.read(&mut buf), 13);
+        assert_eq!(buf, [0xff; 13],);
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_64k),
+        ignore = "This test requires a Flash 64KiB chip. Ensure Flash 64KiB is configured and pass `--cfg flash_64k` to enable."
+    )]
+    fn erase_all_sectors_64k() {
+        let mut flash = assert_ok!(unsafe { Flash::new() });
+        assert_ok!(flash.reset());
+        let mut flash_64k = assert_flash_64k!(flash);
+        // Write some data to it.
+        let mut writer = flash_64k.writer(..);
+        for i in 0..16384 {
+            assert_ok_eq!(
+                writer.write(&[
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8)
+                ]),
+                4
+            );
+        }
+
+        assert_ok!(flash_64k.erase_sectors(..));
+
+        let mut reader = flash_64k.reader(..);
+        let mut buf = [0; 4];
+
+        for _ in 0..16384 {
+            assert_ok_eq!(reader.read(&mut buf), 4);
+            assert_eq!(buf, [0xff; 4],);
+        }
     }
 
     #[test]
@@ -664,8 +721,6 @@ mod tests {
                     2u8.wrapping_add(i as u8),
                     3u8.wrapping_add(i as u8)
                 ],
-                "i: {}",
-                i
             );
         }
     }
@@ -699,6 +754,65 @@ mod tests {
                 0
             ]
         );
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_128k),
+        ignore = "This test requires a Flash 128KiB chip. Ensure Flash 128KiB is configured and pass `--cfg flash_128k` to enable."
+    )]
+    fn erase_one_sector_128k() {
+        let mut flash = assert_ok!(unsafe { Flash::new() });
+        assert_ok!(flash.reset());
+        let mut flash_128k = assert_flash_128k!(flash);
+        // Write some data to it.
+        let mut writer = flash_128k.writer(..RangedUsize::new_static::<13>());
+        assert_ok_eq!(writer.write(b"hello, world!"), 13);
+
+        assert_ok!(
+            flash_128k.erase_sectors(RangedU8::new_static::<0>()..RangedU8::new_static::<1>())
+        );
+
+        let mut reader =
+            flash_128k.reader(RangedUsize::new_static::<0>()..RangedUsize::new_static::<13>());
+        let mut buf = [0; 13];
+
+        assert_ok_eq!(reader.read(&mut buf), 13);
+        assert_eq!(buf, [0xff; 13],);
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_128k),
+        ignore = "This test requires a Flash 128KiB chip. Ensure Flash 128KiB is configured and pass `--cfg flash_128k` to enable."
+    )]
+    fn erase_all_sectors_128k() {
+        let mut flash = assert_ok!(unsafe { Flash::new() });
+        assert_ok!(flash.reset());
+        let mut flash_128k = assert_flash_128k!(flash);
+        // Write some data to it.
+        let mut writer = flash_128k.writer(..);
+        for i in 0..32768 {
+            assert_ok_eq!(
+                writer.write(&[
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8)
+                ]),
+                4
+            );
+        }
+
+        assert_ok!(flash_128k.erase_sectors(..));
+
+        let mut reader = flash_128k.reader(..);
+        let mut buf = [0; 4];
+
+        for _ in 0..32768 {
+            assert_ok_eq!(reader.read(&mut buf), 4);
+            assert_eq!(buf, [0xff; 4],);
+        }
     }
 
     #[test]

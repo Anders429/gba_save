@@ -1,3 +1,4 @@
+use crate::mmio::{Cycles, WAITCNT};
 use core::{
     cmp::min,
     convert::Infallible,
@@ -51,7 +52,7 @@ impl Read for Reader<'_> {
 }
 
 /// An error that can occur when writing to flash memory.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Error {
     /// Data written was unable to be verified.
     WriteFailure,
@@ -138,7 +139,7 @@ where
 {
     let offset = match range.start_bound() {
         Bound::Included(start) => start.get(),
-        Bound::Excluded(start) => start.get().saturating_sub(1),
+        Bound::Excluded(start) => start.get() + 1,
         Bound::Unbounded => 0,
     };
     let address = unsafe { SRAM_MEMORY.add(offset) };
@@ -165,6 +166,10 @@ impl Sram {
     /// Must have exclusive ownership of both SRAM memory and WAITCNT’s SRAM wait control setting
     /// for the duration of its lifetime.
     pub unsafe fn new() -> Self {
+        let mut waitstate_control = unsafe { WAITCNT.read_volatile() };
+        waitstate_control.set_backup_waitstate(Cycles::_8);
+        unsafe { WAITCNT.write_volatile(waitstate_control) };
+
         Self { _private: () }
     }
 
@@ -186,5 +191,205 @@ impl Sram {
     {
         let (address, len) = translate_range_to_buffer(range);
         unsafe { Writer::new_unchecked(address, len) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{translate_range_to_buffer, Error, Sram, SRAM_MEMORY};
+    use claims::{assert_err_eq, assert_ok_eq};
+    use deranged::RangedUsize;
+    use embedded_io::{Read, Write};
+    use gba_test::test;
+    use more_ranges::{
+        RangeFromExclusive, RangeFromExclusiveToExclusive, RangeFromExclusiveToInclusive,
+    };
+
+    #[test]
+    fn translate_range_to_buffer_unbounded_unbounded() {
+        assert_eq!(
+            translate_range_to_buffer::<32767, _>(..),
+            (SRAM_MEMORY, 32768)
+        );
+    }
+
+    #[test]
+    fn translate_range_to_buffer_unbounded_included() {
+        assert_eq!(
+            translate_range_to_buffer::<32767, _>(..=RangedUsize::new_static::<42>()),
+            (SRAM_MEMORY, 43)
+        );
+    }
+
+    #[test]
+    fn translate_range_to_buffer_unbounded_excluded() {
+        assert_eq!(
+            translate_range_to_buffer::<32767, _>(..RangedUsize::new_static::<42>()),
+            (SRAM_MEMORY, 42)
+        );
+    }
+
+    #[test]
+    fn translate_range_to_buffer_included_unbounded() {
+        assert_eq!(
+            translate_range_to_buffer::<32767, _>(RangedUsize::new_static::<42>()..),
+            (unsafe { SRAM_MEMORY.add(42) }, 32726)
+        );
+    }
+
+    #[test]
+    fn translate_range_to_buffer_included_included() {
+        assert_eq!(
+            translate_range_to_buffer::<32767, _>(
+                RangedUsize::new_static::<42>()..=RangedUsize::new_static::<100>()
+            ),
+            (unsafe { SRAM_MEMORY.add(42) }, 59)
+        );
+    }
+
+    #[test]
+    fn translate_range_to_buffer_included_excluded() {
+        assert_eq!(
+            translate_range_to_buffer::<32767, _>(
+                RangedUsize::new_static::<42>()..RangedUsize::new_static::<100>()
+            ),
+            (unsafe { SRAM_MEMORY.add(42) }, 58)
+        );
+    }
+
+    #[test]
+    fn translate_range_to_buffer_excluded_unbounded() {
+        assert_eq!(
+            translate_range_to_buffer::<32767, _>(RangeFromExclusive {
+                start: RangedUsize::new_static::<42>()
+            }),
+            (unsafe { SRAM_MEMORY.add(43) }, 32725)
+        );
+    }
+
+    #[test]
+    fn translate_range_to_buffer_excluded_included() {
+        assert_eq!(
+            translate_range_to_buffer::<32767, _>(RangeFromExclusiveToInclusive {
+                start: RangedUsize::new_static::<42>(),
+                end: RangedUsize::new_static::<100>()
+            }),
+            (unsafe { SRAM_MEMORY.add(43) }, 58)
+        );
+    }
+
+    #[test]
+    fn translate_range_to_buffer_excluded_excluded() {
+        assert_eq!(
+            translate_range_to_buffer::<32767, _>(RangeFromExclusiveToExclusive {
+                start: RangedUsize::new_static::<42>(),
+                end: RangedUsize::new_static::<100>()
+            }),
+            (unsafe { SRAM_MEMORY.add(43) }, 57)
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(sram),
+        ignore = "This test requires an SRAM chip. Ensure SRAM is configured and pass `--cfg sram` to enable."
+    )]
+    fn empty_range_read() {
+        let sram = unsafe { Sram::new() };
+        let mut reader =
+            sram.reader(RangedUsize::new_static::<0>()..RangedUsize::new_static::<0>());
+
+        let mut buf = [1, 2, 3, 4];
+        assert_ok_eq!(reader.read(&mut buf), 0);
+        assert_eq!(buf, [1, 2, 3, 4]);
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(sram),
+        ignore = "This test requires an SRAM chip. Ensure SRAM is configured and pass `--cfg sram` to enable."
+    )]
+    fn empty_range_write() {
+        let mut sram = unsafe { Sram::new() };
+        let mut writer =
+            sram.writer(RangedUsize::new_static::<0>()..RangedUsize::new_static::<0>());
+
+        assert_err_eq!(writer.write(&[0]), Error::EndOfWriter);
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(sram),
+        ignore = "This test requires an SRAM chip. Ensure SRAM is configured and pass `--cfg sram` to enable."
+    )]
+    fn full_range() {
+        let mut sram = unsafe { Sram::new() };
+        let mut writer = sram.writer(..);
+
+        for i in 0..8192 {
+            assert_ok_eq!(
+                writer.write(&[
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8)
+                ]),
+                4
+            );
+        }
+
+        let mut reader = sram.reader(..);
+        let mut buf = [0, 0, 0, 0];
+
+        for i in 0..8192 {
+            assert_ok_eq!(reader.read(&mut buf), 4);
+            assert_eq!(
+                buf,
+                [
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8)
+                ]
+            );
+        }
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(sram),
+        ignore = "This test requires an SRAM chip. Ensure SRAM is configured and pass `--cfg sram` to enable."
+    )]
+    fn partial_range() {
+        let mut sram = unsafe { Sram::new() };
+        let mut writer =
+            sram.writer(RangedUsize::new_static::<42>()..RangedUsize::new_static::<100>());
+
+        assert_ok_eq!(writer.write(&[b'a'; 100]), 58);
+
+        let mut reader =
+            sram.reader(RangedUsize::new_static::<51>()..RangedUsize::new_static::<60>());
+        let mut buf = [0; 20];
+
+        assert_ok_eq!(reader.read(&mut buf), 9);
+        assert_eq!(
+            buf,
+            [
+                b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0
+            ]
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
+        sram,
+        ignore = "This test cannot be run with an SRAM chip. Ensure SRAM is not configured and do not pass `--cfg sram` to enable."
+    )]
+    fn write_failure() {
+        let mut sram = unsafe { Sram::new() };
+        let mut writer = sram.writer(..);
+
+        assert_err_eq!(writer.write(b"hello, world!"), Error::WriteFailure);
     }
 }

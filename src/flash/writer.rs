@@ -142,6 +142,7 @@ impl Write for Writer128K<'_> {
 /// A writer on a 64KiB Atmel flash device.
 ///
 /// This type allows writing data on the range specified upon creation.
+#[derive(Debug)]
 pub struct Writer64KAtmel<'a> {
     address: *mut u8,
     len: usize,
@@ -189,18 +190,19 @@ impl Write for Writer64KAtmel<'_> {
                 if self.len == 0 {
                     return Err(Error::EndOfWriter);
                 }
-                self.address = unsafe { self.address.add(write_count) };
                 self.len -= write_count;
                 return Ok(write_count);
             }
 
-            let offset = self.address.align_offset(128);
             unsafe {
-                *self.buf.get_unchecked_mut(offset) = *buf.get_unchecked(write_count);
+                *self.buf.get_unchecked_mut(self.address as usize % 128) =
+                    *buf.get_unchecked(write_count);
             }
             self.flushed = false;
 
-            if offset >= 127 {
+            unsafe { self.address = self.address.add(1) };
+
+            if self.address as usize % 128 == 0 {
                 self.flush()?;
             }
 
@@ -214,10 +216,9 @@ impl Write for Writer64KAtmel<'_> {
         }
 
         // Read any remaining bytes at the back of the buffer.
-        let offset = self.address.align_offset(128);
-        let remaining = 128 - offset;
-        if remaining != 128 {
-            let mut reader = unsafe { Reader64K::new_unchecked(self.address, remaining) };
+        let offset = self.address as usize % 128;
+        if offset != 0 {
+            let mut reader = unsafe { Reader64K::new_unchecked(self.address, 128 - offset) };
             unsafe {
                 reader
                     .read_exact(self.buf.get_unchecked_mut(offset..))
@@ -225,7 +226,7 @@ impl Write for Writer64KAtmel<'_> {
             };
         }
 
-        let offset_address = unsafe { self.address.sub(offset) };
+        let offset_address = unsafe { self.address.sub(if offset == 0 { 128 } else { offset }) };
 
         // Disable interrupts, storing the previous value.
         //

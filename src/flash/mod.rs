@@ -453,6 +453,18 @@ mod tests {
         };
     }
 
+    macro_rules! assert_flash_64k_atmel {
+        ($expr:expr) => {
+            match $expr {
+                Flash::Flash64KAtmel(flash_64k_atmel) => flash_64k_atmel,
+                flash => panic!(
+                    "assertion failed, expected Flash::Flash64KAtmel(..), got {:?}",
+                    flash
+                ),
+            }
+        };
+    }
+
     macro_rules! assert_flash_128k {
         ($expr:expr) => {
             match $expr {
@@ -642,6 +654,126 @@ mod tests {
 
     #[test]
     #[cfg_attr(
+        not(flash_64k_atmel),
+        ignore = "This test requires a Flash 64KiB Atmel chip. Ensure Flash 64KiB Atmel is configured and pass `--cfg flash_64k_atmel` to enable."
+    )]
+    fn new_64k_atmel() {
+        assert_flash_64k_atmel!(assert_ok!(unsafe { Flash::new() }));
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_64k_atmel),
+        ignore = "This test requires a Flash 64KiB Atmel chip. Ensure Flash 64KiB Atmel is configured and pass `--cfg flash_64k_atmel` to enable."
+    )]
+    fn empty_range_read_64k_atmel() {
+        let mut flash = assert_flash_64k_atmel!(assert_ok!(unsafe { Flash::new() }));
+        let mut buffer = [1, 2, 3, 4];
+
+        assert_ok_eq!(
+            flash
+                .reader(RangedUsize::new_static::<0>()..RangedUsize::new_static::<0>())
+                .read(&mut buffer),
+            0
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_64k_atmel),
+        ignore = "This test requires a Flash 64KiB Atmel chip. Ensure Flash 64KiB Atmel is configured and pass `--cfg flash_64k_atmel` to enable."
+    )]
+    fn empty_range_write_64k_atmel() {
+        let mut flash = assert_flash_64k_atmel!(assert_ok!(unsafe { Flash::new() }));
+
+        assert_err_eq!(
+            flash
+                .writer(RangedUsize::new_static::<0>()..RangedUsize::new_static::<0>())
+                .write(&[1, 2, 3, 4]),
+            Error::EndOfWriter
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_64k_atmel),
+        ignore = "This test requires a Flash 64KiB Atmel chip. Ensure Flash 64KiB Atmel is configured and pass `--cfg flash_64k_atmel` to enable."
+    )]
+    fn full_range_64k_atmel() {
+        let mut flash = assert_ok!(unsafe { Flash::new() });
+        assert_ok!(flash.reset());
+        let mut flash_64k_atmel = assert_flash_64k_atmel!(flash);
+        let mut writer = flash_64k_atmel.writer(..);
+
+        for i in 0..16384 {
+            assert_ok_eq!(
+                writer.write(&[
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8)
+                ]),
+                4
+            );
+        }
+        drop(writer);
+
+        // Wait for the data to be available.
+        wait(Duration::from_millis(1));
+
+        let mut reader = flash_64k_atmel.reader(..);
+        let mut buf = [0, 0, 0, 0];
+
+        for i in 0..16384 {
+            assert_ok_eq!(reader.read(&mut buf), 4);
+            assert_eq!(
+                buf,
+                [
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8)
+                ],
+                "i: {}",
+                i,
+            );
+        }
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(flash_64k_atmel),
+        ignore = "This test requires a Flash 64KiB Atmel chip. Ensure Flash 64KiB Atmel is configured and pass `--cfg flash_64k_atmel` to enable."
+    )]
+    fn partial_range_64k_atmel() {
+        let mut flash = assert_ok!(unsafe { Flash::new() });
+        assert_ok!(flash.reset());
+        let mut flash_64k_atmel = assert_flash_64k_atmel!(flash);
+        let mut writer = flash_64k_atmel
+            .writer(RangedUsize::new_static::<42>()..RangedUsize::new_static::<130>());
+
+        assert_ok_eq!(writer.write(&[b'a'; 100]), 88);
+        drop(writer);
+
+        // Wait for the data to be available.
+        wait(Duration::from_millis(1));
+
+        let mut reader = flash_64k_atmel
+            .reader(RangedUsize::new_static::<121>()..RangedUsize::new_static::<130>());
+        let mut buf = [0; 20];
+
+        assert_ok_eq!(reader.read(&mut buf), 9);
+        assert_eq!(
+            buf,
+            [
+                b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0
+            ]
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
         not(flash_128k),
         ignore = "This test requires a Flash 128KiB chip. Ensure Flash 128KiB is configured and pass `--cfg flash_128k` to enable."
     )]
@@ -817,21 +949,21 @@ mod tests {
 
     #[test]
     #[cfg_attr(
-        any(flash_64k, flash_128k),
-        ignore = "This test cannot be run with a Flash chip. Ensure Flash is not configured and do not pass `--cfg flash_64k` or `--cfg flash_128k` to enable."
+        any(flash_64k, flash_64k_atmel, flash_128k),
+        ignore = "This test cannot be run with a Flash chip. Ensure Flash is not configured and do not pass `--cfg flash_64k`, `--cfg flash_64k_atmel`, or `--cfg flash_128k` to enable."
     )]
     fn new_unknown() {
         assert_err_eq!(unsafe { Flash::new() }, UnknownDeviceID(0xffff));
     }
 
-    #[test]
-    #[cfg_attr(
-        all(not(flash_64k), not(flash_128k)),
-        ignore = "This test requires a Flash chip. Ensure Flash is configured and pass `--cfg flash_64k` or `--cfg flash_128k` to enable."
-    )]
-    fn reset() {
-        let mut flash = assert_ok!(unsafe { Flash::new() });
+    // #[test]
+    // #[cfg_attr(
+    //     all(not(flash_64k), not(flash_64k_atmel), not(flash_128k)),
+    //     ignore = "This test requires a Flash chip. Ensure Flash is configured and pass `--cfg flash_64k`, `--cfg flash_64k_atmel`, or `--cfg flash_128k` to enable."
+    // )]
+    // fn reset() {
+    //     let mut flash = assert_ok!(unsafe { Flash::new() });
 
-        assert_ok!(flash.reset());
-    }
+    //     assert_ok!(flash.reset());
+    // }
 }

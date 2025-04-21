@@ -38,7 +38,7 @@ impl TryFrom<u16> for Device {
             0x1b32 => Ok(Device::MN63F805MNP),
             0x1cc2 => Ok(Device::MX29L512),
             0x3d1f => Ok(Device::AT29LV512),
-            0xd4b4 => Ok(Device::LE39FW512),
+            0xd4bf => Ok(Device::LE39FW512),
             _ => Err(UnknownDeviceID(id)),
         }
     }
@@ -79,7 +79,7 @@ mod tests {
 
     #[test]
     fn device_from_LE39FW512() {
-        assert_ok_eq!(Device::try_from(0xd4b4), Device::LE39FW512);
+        assert_ok_eq!(Device::try_from(0xd4bf), Device::LE39FW512);
     }
 
     #[test]

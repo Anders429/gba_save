@@ -1,10 +1,8 @@
-use crate::mmio::{Cycles, WAITCNT};
-use core::{
-    cmp::min,
-    convert::Infallible,
-    marker::PhantomData,
-    ops::{Bound, RangeBounds},
+use crate::{
+    mmio::{Cycles, WAITCNT},
+    range::translate_range_to_buffer,
 };
+use core::{cmp::min, convert::Infallible, marker::PhantomData, ops::RangeBounds};
 use deranged::RangedUsize;
 use embedded_io::{ErrorKind, ErrorType, Read, Write};
 
@@ -133,24 +131,6 @@ impl Write for Writer<'_> {
     }
 }
 
-fn translate_range_to_buffer<const MAX: usize, Range>(range: Range) -> (*mut u8, usize)
-where
-    Range: RangeBounds<RangedUsize<0, MAX>>,
-{
-    let offset = match range.start_bound() {
-        Bound::Included(start) => start.get(),
-        Bound::Excluded(start) => start.get() + 1,
-        Bound::Unbounded => 0,
-    };
-    let address = unsafe { SRAM_MEMORY.add(offset) };
-    let len = match range.end_bound() {
-        Bound::Included(end) => end.get() + 1,
-        Bound::Excluded(end) => end.get(),
-        Bound::Unbounded => MAX + 1,
-    } - offset;
-    (address, len)
-}
-
 /// Access to SRAM backup.
 pub struct Sram {
     /// As this struct maintains ownership of SRAM memory and WAITCNT's SRAM wait control setting,
@@ -179,7 +159,7 @@ impl Sram {
         Range: RangeBounds<RangedUsize<0, 32767>>,
         'a: 'b,
     {
-        let (address, len) = translate_range_to_buffer(range);
+        let (address, len) = translate_range_to_buffer(range, SRAM_MEMORY);
         unsafe { Reader::new_unchecked(address, len) }
     }
 
@@ -189,105 +169,18 @@ impl Sram {
         Range: RangeBounds<RangedUsize<0, 32767>>,
         'a: 'b,
     {
-        let (address, len) = translate_range_to_buffer(range);
+        let (address, len) = translate_range_to_buffer(range, SRAM_MEMORY);
         unsafe { Writer::new_unchecked(address, len) }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{translate_range_to_buffer, Error, Sram, SRAM_MEMORY};
+    use super::{Error, Sram};
     use claims::{assert_err_eq, assert_ok_eq};
     use deranged::RangedUsize;
     use embedded_io::{Read, Write};
     use gba_test::test;
-    use more_ranges::{
-        RangeFromExclusive, RangeFromExclusiveToExclusive, RangeFromExclusiveToInclusive,
-    };
-
-    #[test]
-    fn translate_range_to_buffer_unbounded_unbounded() {
-        assert_eq!(
-            translate_range_to_buffer::<32767, _>(..),
-            (SRAM_MEMORY, 32768)
-        );
-    }
-
-    #[test]
-    fn translate_range_to_buffer_unbounded_included() {
-        assert_eq!(
-            translate_range_to_buffer::<32767, _>(..=RangedUsize::new_static::<42>()),
-            (SRAM_MEMORY, 43)
-        );
-    }
-
-    #[test]
-    fn translate_range_to_buffer_unbounded_excluded() {
-        assert_eq!(
-            translate_range_to_buffer::<32767, _>(..RangedUsize::new_static::<42>()),
-            (SRAM_MEMORY, 42)
-        );
-    }
-
-    #[test]
-    fn translate_range_to_buffer_included_unbounded() {
-        assert_eq!(
-            translate_range_to_buffer::<32767, _>(RangedUsize::new_static::<42>()..),
-            (unsafe { SRAM_MEMORY.add(42) }, 32726)
-        );
-    }
-
-    #[test]
-    fn translate_range_to_buffer_included_included() {
-        assert_eq!(
-            translate_range_to_buffer::<32767, _>(
-                RangedUsize::new_static::<42>()..=RangedUsize::new_static::<100>()
-            ),
-            (unsafe { SRAM_MEMORY.add(42) }, 59)
-        );
-    }
-
-    #[test]
-    fn translate_range_to_buffer_included_excluded() {
-        assert_eq!(
-            translate_range_to_buffer::<32767, _>(
-                RangedUsize::new_static::<42>()..RangedUsize::new_static::<100>()
-            ),
-            (unsafe { SRAM_MEMORY.add(42) }, 58)
-        );
-    }
-
-    #[test]
-    fn translate_range_to_buffer_excluded_unbounded() {
-        assert_eq!(
-            translate_range_to_buffer::<32767, _>(RangeFromExclusive {
-                start: RangedUsize::new_static::<42>()
-            }),
-            (unsafe { SRAM_MEMORY.add(43) }, 32725)
-        );
-    }
-
-    #[test]
-    fn translate_range_to_buffer_excluded_included() {
-        assert_eq!(
-            translate_range_to_buffer::<32767, _>(RangeFromExclusiveToInclusive {
-                start: RangedUsize::new_static::<42>(),
-                end: RangedUsize::new_static::<100>()
-            }),
-            (unsafe { SRAM_MEMORY.add(43) }, 58)
-        );
-    }
-
-    #[test]
-    fn translate_range_to_buffer_excluded_excluded() {
-        assert_eq!(
-            translate_range_to_buffer::<32767, _>(RangeFromExclusiveToExclusive {
-                start: RangedUsize::new_static::<42>(),
-                end: RangedUsize::new_static::<100>()
-            }),
-            (unsafe { SRAM_MEMORY.add(43) }, 57)
-        );
-    }
 
     #[test]
     #[cfg_attr(

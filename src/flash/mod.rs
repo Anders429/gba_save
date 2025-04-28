@@ -56,7 +56,10 @@ pub use error::Error;
 pub use reader::{Reader128K, Reader64K};
 pub use writer::{Writer128K, Writer64K, Writer64KAtmel};
 
-use crate::mmio::{Cycles, WAITCNT};
+use crate::{
+    mmio::{Cycles, WAITCNT},
+    range::translate_range_to_buffer,
+};
 use core::{
     hint::black_box,
     ops,
@@ -174,24 +177,6 @@ fn erase_sector(sector: u8) -> Result<(), Error> {
     )
 }
 
-fn translate_range_to_buffer<const MAX: usize, Range>(range: Range) -> (*mut u8, usize)
-where
-    Range: RangeBounds<RangedUsize<0, MAX>>,
-{
-    let offset = match range.start_bound() {
-        Bound::Included(start) => start.get(),
-        Bound::Excluded(start) => start.get() + 1,
-        Bound::Unbounded => 0,
-    };
-    let address = unsafe { FLASH_MEMORY.add(offset) };
-    let len = match range.end_bound() {
-        Bound::Included(end) => end.get() + 1,
-        Bound::Excluded(end) => end.get(),
-        Bound::Unbounded => MAX + 1,
-    } - offset;
-    (address, len)
-}
-
 fn translate_range_to_sectors<const MAX: u8, Range>(range: Range) -> ops::Range<u8>
 where
     Range: RangeBounds<RangedU8<0, MAX>>,
@@ -222,7 +207,7 @@ impl Flash64K {
         'a: 'b,
         Range: RangeBounds<RangedUsize<0, 65535>>,
     {
-        let (address, len) = translate_range_to_buffer(range);
+        let (address, len) = translate_range_to_buffer(range, FLASH_MEMORY);
         unsafe { Reader64K::new_unchecked(address, len) }
     }
 
@@ -246,7 +231,7 @@ impl Flash64K {
         'a: 'b,
         Range: RangeBounds<RangedUsize<0, 65535>>,
     {
-        let (address, len) = translate_range_to_buffer(range);
+        let (address, len) = translate_range_to_buffer(range, FLASH_MEMORY);
         unsafe { Writer64K::new_unchecked(address, len) }
     }
 }
@@ -266,7 +251,7 @@ impl Flash64KAtmel {
         'a: 'b,
         Range: RangeBounds<RangedUsize<0, 65535>>,
     {
-        let (address, len) = translate_range_to_buffer(range);
+        let (address, len) = translate_range_to_buffer(range, FLASH_MEMORY);
         unsafe { Reader64K::new_unchecked(address, len) }
     }
 
@@ -276,7 +261,7 @@ impl Flash64KAtmel {
         'a: 'b,
         Range: RangeBounds<RangedUsize<0, 65535>>,
     {
-        let (address, len) = translate_range_to_buffer(range);
+        let (address, len) = translate_range_to_buffer(range, FLASH_MEMORY);
         unsafe { Writer64KAtmel::new_unchecked(address, len) }
     }
 }
@@ -295,7 +280,7 @@ impl Flash128K {
         'a: 'b,
         Range: RangeBounds<RangedUsize<0, 131071>>,
     {
-        let (address, len) = translate_range_to_buffer(range);
+        let (address, len) = translate_range_to_buffer(range, FLASH_MEMORY);
         unsafe { Reader128K::new_unchecked(address, len) }
     }
 
@@ -335,7 +320,7 @@ impl Flash128K {
         'a: 'b,
         Range: RangeBounds<RangedUsize<0, 131071>>,
     {
-        let (address, len) = translate_range_to_buffer(range);
+        let (address, len) = translate_range_to_buffer(range, FLASH_MEMORY);
         unsafe { Writer128K::new_unchecked(address, len) }
     }
 }
@@ -956,14 +941,14 @@ mod tests {
         assert_err_eq!(unsafe { Flash::new() }, UnknownDeviceID(0xffff));
     }
 
-    // #[test]
-    // #[cfg_attr(
-    //     all(not(flash_64k), not(flash_64k_atmel), not(flash_128k)),
-    //     ignore = "This test requires a Flash chip. Ensure Flash is configured and pass `--cfg flash_64k`, `--cfg flash_64k_atmel`, or `--cfg flash_128k` to enable."
-    // )]
-    // fn reset() {
-    //     let mut flash = assert_ok!(unsafe { Flash::new() });
+    #[test]
+    #[cfg_attr(
+        all(not(flash_64k), not(flash_64k_atmel), not(flash_128k)),
+        ignore = "This test requires a Flash chip. Ensure Flash is configured and pass `--cfg flash_64k`, `--cfg flash_64k_atmel`, or `--cfg flash_128k` to enable."
+    )]
+    fn reset() {
+        let mut flash = assert_ok!(unsafe { Flash::new() });
 
-    //     assert_ok!(flash.reset());
-    // }
+        assert_ok!(flash.reset());
+    }
 }

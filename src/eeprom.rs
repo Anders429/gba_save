@@ -7,8 +7,12 @@ use deranged::{OptionRangedUsize, RangedUsize};
 use embedded_io::{ErrorKind, ErrorType, Read, Write};
 
 const EEPROM_MEMORY: *mut u8 = 0x0D00_0000 as *mut u8;
-const ADDRESS_512B: usize = 6;
-const ADDRESS_8KB: usize = 14;
+const ADDRESS_LEN_512B: usize = 6;
+const ADDRESS_LEN_8KB: usize = 14;
+const LONG_ADDRESS_LEN_512B: usize = ADDRESS_LEN_512B + 3;
+const LONG_ADDRESS_LEN_8KB: usize = ADDRESS_LEN_8KB + 3;
+const BIT_LEN_512B: usize = 73;
+const BIT_LEN_8KB: usize = 81;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
@@ -105,13 +109,13 @@ fn populate_address<const ADDRESS_LEN: usize>(bit_buffer: &mut [u16], address: *
     }
 }
 
-pub struct Reader512B<'a> {
+pub struct Reader<'a> {
     address: *mut u8,
     len: usize,
     lifetime: PhantomData<&'a ()>,
 }
 
-impl Reader512B<'_> {
+impl Reader<'_> {
     unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
         Self {
             address,
@@ -119,14 +123,8 @@ impl Reader512B<'_> {
             lifetime: PhantomData,
         }
     }
-}
 
-impl ErrorType for Reader512B<'_> {
-    type Error = Infallible;
-}
-
-impl Read for Reader512B<'_> {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+    fn read<const ADDRESS_LEN: usize>(&mut self, buf: &mut [u8]) -> Result<usize, Infallible> {
         let mut bits = [0u16; 68];
 
         // Read in chunks of 8 bytes.
@@ -142,12 +140,12 @@ impl Read for Reader512B<'_> {
             // Request a read of EEPROM data.
             bits[0] = 1;
             bits[1] = 1;
-            populate_address::<ADDRESS_512B>(&mut bits[2..], unsafe {
+            populate_address::<ADDRESS_LEN>(&mut bits[2..], unsafe {
                 self.address.byte_add(read_count)
             });
 
             // Send to EEPROM
-            write(&bits[..9]);
+            write(&bits[..ADDRESS_LEN + 3]);
             // Receive from EEPROM.
             let bits_to_read = read_limit - read_count;
             let offset = unsafe { RangedUsize::new_unchecked(self.address as usize & 0b0000_0111) };
@@ -167,47 +165,28 @@ impl Read for Reader512B<'_> {
 }
 
 #[derive(Debug)]
-pub struct Writer512B<'a> {
+pub struct Writer<'a> {
     address: *mut u8,
     len: usize,
-    bits: [u16; 73],
     index: OptionRangedUsize<0, 7>,
     lifetime: PhantomData<&'a ()>,
 }
 
-impl Writer512B<'_> {
+impl Writer<'_> {
     unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
         Self {
             address,
             len,
-            bits: [0; 73],
             index: OptionRangedUsize::None,
             lifetime: PhantomData,
         }
     }
 
-    /// Flush without checking the current address and populating extra data.
-    ///
-    /// Despite the name, this isn't actually unsafe. It just indicates that data might be
-    /// overwritten in memory if the internal buffer isn't completely aligned.
-    fn flush_unchecked(&mut self) -> Result<(), Error> {
-        write(&self.bits);
-        // Wait for the write to succeed.
-        for _ in 0..10000 {
-            if unsafe { (EEPROM_MEMORY as *mut u16).read_volatile() } & 1 > 0 {
-                return Ok(());
-            }
-        }
-        Err(Error::Timeout)
-    }
-}
-
-impl ErrorType for Writer512B<'_> {
-    type Error = Error;
-}
-
-impl Write for Writer512B<'_> {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+    fn write<const ADDRESS_LEN: usize, const BIT_LEN: usize, const LONG_ADDRESS_LEN: usize>(
+        &mut self,
+        buf: &[u8],
+        bits: &mut [u16; BIT_LEN],
+    ) -> Result<usize, Error> {
         // Write in chunks of 8 bytes.
         let mut write_count = 0;
         loop {
@@ -219,19 +198,20 @@ impl Write for Writer512B<'_> {
                     }
                     self.address = unsafe { self.address.add(write_count) };
                     self.len = self.len.saturating_sub(write_count);
-                    log::debug!("{:?}", self);
                     return Ok(write_count);
                 }
 
                 // Populate the data to be written.
                 let mut new_index = Some(index);
-                for (byte, bits) in buf[write_count..write_limit]
+                for (byte, bits_group) in buf[write_count..write_limit]
                     .iter()
                     .copied()
                     .take(8 - index.get())
-                    .zip(self.bits[8 + (index.get() * 8)..72].chunks_mut(8))
+                    .zip(
+                        bits[(2 + ADDRESS_LEN + index.get() * 8)..(66 + ADDRESS_LEN)].chunks_mut(8),
+                    )
                 {
-                    for (i, bit) in bits.iter_mut().enumerate() {
+                    for (i, bit) in bits_group.iter_mut().enumerate() {
                         *bit = (byte as u16 >> (7 - i)) & 1;
                     }
                     write_count += 1;
@@ -241,28 +221,28 @@ impl Write for Writer512B<'_> {
                 }
                 self.index = new_index.into();
                 if new_index.is_none() {
-                    self.flush_unchecked()?;
+                    self.flush_unchecked(bits)?;
                 }
             } else {
-                self.bits = [0u16; 73];
-                self.bits[0] = 1;
-                self.bits[1] = 0;
+                *bits = [0u16; BIT_LEN];
+                bits[0] = 1;
+                bits[1] = 0;
                 // Read in any previous bits if we are not starting at zero.
                 if self.address as usize & 0b0000_0111 != 0 && write_count == 0 {
                     // Request the read.
-                    let mut bits = [0; 9];
-                    bits[0] = 1;
-                    bits[1] = 1;
-                    populate_address::<ADDRESS_512B>(&mut bits[2..], unsafe {
+                    let mut new_bits = [0; LONG_ADDRESS_LEN];
+                    new_bits[0] = 1;
+                    new_bits[1] = 1;
+                    populate_address::<ADDRESS_LEN>(&mut new_bits[2..], unsafe {
                         self.address.byte_add(write_count)
                     });
-                    write(&bits);
+                    write(&new_bits);
 
                     // Note that we can ignore the first four bits; they'll be overwritten by the
                     // address in the next step anyway.
-                    read_bits(&mut self.bits[4..]);
+                    read_bits(&mut bits[4..]);
                 }
-                populate_address::<ADDRESS_512B>(&mut self.bits[2..], unsafe {
+                populate_address::<ADDRESS_LEN>(&mut bits[2..], unsafe {
                     self.address.byte_add(write_count)
                 });
                 if write_count == 0 {
@@ -276,24 +256,45 @@ impl Write for Writer512B<'_> {
         }
     }
 
-    fn flush(&mut self) -> Result<(), Self::Error> {
+    /// Flush without checking the current address and populating extra data.
+    ///
+    /// Despite the name, this isn't actually unsafe. It just indicates that data might be
+    /// overwritten in memory if the internal buffer isn't completely aligned.
+    fn flush_unchecked<const BIT_LEN: usize>(
+        &mut self,
+        bits: &[u16; BIT_LEN],
+    ) -> Result<(), Error> {
+        write(bits);
+        // Wait for the write to succeed.
+        for _ in 0..10000 {
+            if unsafe { (EEPROM_MEMORY as *mut u16).read_volatile() } & 1 > 0 {
+                return Ok(());
+            }
+        }
+        Err(Error::Timeout)
+    }
+
+    fn flush<const ADDRESS_LEN: usize, const BIT_LEN: usize>(
+        &mut self,
+        bits: &mut [u16; BIT_LEN],
+    ) -> Result<(), Error> {
         // If the address is not aligned, then we need to make sure we aren't overwriting any
         // trailing data.
         //
         // We resolve this by checking and reading any trailing data.
         if self.address as usize & 0b0000_0111 != 0 {
-            let mut bits = [0; 68];
+            let mut new_bits = [0; 68];
 
             // Request the read.
-            bits[0] = 1;
-            bits[1] = 1;
-            populate_address::<ADDRESS_512B>(&mut bits[2..], self.address);
-            write(&bits);
-            read_bits(&mut bits);
+            new_bits[0] = 1;
+            new_bits[1] = 1;
+            populate_address::<ADDRESS_LEN>(&mut new_bits[2..], self.address);
+            write(&new_bits);
+            read_bits(&mut new_bits);
 
             // Figure out how many bits to copy over.
             for (bit, new_bit) in
-                self.bits.iter_mut().zip(bits.iter()).rev().take(
+                bits.iter_mut().zip(new_bits.iter()).rev().take(
                     ((self.address as usize & (!0b0000_0111)) + 7 - self.address as usize) * 8,
                 )
             {
@@ -301,7 +302,60 @@ impl Write for Writer512B<'_> {
             }
         }
 
-        self.flush_unchecked()
+        self.flush_unchecked(bits)
+    }
+}
+
+pub struct Reader512B<'a> {
+    reader: Reader<'a>,
+}
+
+impl Reader512B<'_> {
+    unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        Self {
+            reader: unsafe { Reader::new_unchecked(address, len) },
+        }
+    }
+}
+
+impl ErrorType for Reader512B<'_> {
+    type Error = Infallible;
+}
+
+impl Read for Reader512B<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        self.reader.read::<ADDRESS_LEN_512B>(buf)
+    }
+}
+
+#[derive(Debug)]
+pub struct Writer512B<'a> {
+    writer: Writer<'a>,
+    bits: [u16; BIT_LEN_512B],
+}
+
+impl Writer512B<'_> {
+    unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        Self {
+            writer: unsafe { Writer::new_unchecked(address, len) },
+            bits: [0; BIT_LEN_512B],
+        }
+    }
+}
+
+impl ErrorType for Writer512B<'_> {
+    type Error = Error;
+}
+
+impl Write for Writer512B<'_> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        self.writer
+            .write::<ADDRESS_LEN_512B, BIT_LEN_512B, LONG_ADDRESS_LEN_512B>(buf, &mut self.bits)
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        self.writer
+            .flush::<ADDRESS_LEN_512B, BIT_LEN_512B>(&mut self.bits)
     }
 }
 
@@ -334,11 +388,55 @@ impl Eeprom512B {
 }
 
 pub struct Reader8K<'a> {
-    lifetime: PhantomData<&'a ()>,
+    reader: Reader<'a>,
+}
+
+impl Reader8K<'_> {
+    unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        Self {
+            reader: unsafe { Reader::new_unchecked(address, len) },
+        }
+    }
+}
+
+impl ErrorType for Reader8K<'_> {
+    type Error = Infallible;
+}
+
+impl Read for Reader8K<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        self.reader.read::<ADDRESS_LEN_8KB>(buf)
+    }
 }
 
 pub struct Writer8K<'a> {
-    lifetime: PhantomData<&'a ()>,
+    writer: Writer<'a>,
+    bits: [u16; BIT_LEN_8KB],
+}
+
+impl Writer8K<'_> {
+    unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        Self {
+            writer: unsafe { Writer::new_unchecked(address, len) },
+            bits: [0; BIT_LEN_8KB],
+        }
+    }
+}
+
+impl ErrorType for Writer8K<'_> {
+    type Error = Error;
+}
+
+impl Write for Writer8K<'_> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        self.writer
+            .write::<ADDRESS_LEN_8KB, BIT_LEN_8KB, LONG_ADDRESS_LEN_8KB>(buf, &mut self.bits)
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        self.writer
+            .flush::<ADDRESS_LEN_8KB, BIT_LEN_8KB>(&mut self.bits)
+    }
 }
 
 pub struct Eeprom8K {
@@ -355,7 +453,8 @@ impl Eeprom8K {
         Range: RangeBounds<RangedUsize<0, 8191>>,
         'a: 'b,
     {
-        todo!()
+        let (address, len) = translate_range_to_buffer(range, EEPROM_MEMORY);
+        unsafe { Reader8K::new_unchecked(address, len) }
     }
 
     pub fn writer<'a, 'b, Range>(&'a mut self, range: Range) -> Writer8K<'a>
@@ -363,20 +462,24 @@ impl Eeprom8K {
         Range: RangeBounds<RangedUsize<0, 8191>>,
         'a: 'b,
     {
-        todo!()
+        let (address, len) = translate_range_to_buffer(range, EEPROM_MEMORY);
+        unsafe { Writer8K::new_unchecked(address, len) }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Eeprom512B, Error};
+    use super::{Eeprom512B, Eeprom8K, Error};
     use claims::{assert_err_eq, assert_ok, assert_ok_eq};
     use deranged::RangedUsize;
     use embedded_io::{Read, Write};
     use gba_test::test;
 
     #[test]
-    #[cfg_attr(not(eeprom_512b), ignore = "This test requires a 512B EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_512b` to enable.")]
+    #[cfg_attr(
+        not(eeprom_512b),
+        ignore = "This test requires a 512B EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_512b` to enable."
+    )]
     fn empty_range_read_512b() {
         let mut eeprom = unsafe { Eeprom512B::new() };
         let mut buf = [1, 2, 3, 4];
@@ -391,7 +494,10 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(not(eeprom_512b), ignore = "This test requires a 512B EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_512b` to enable.")]
+    #[cfg_attr(
+        not(eeprom_512b),
+        ignore = "This test requires a 512B EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_512b` to enable."
+    )]
     fn empty_range_write_512b() {
         let mut eeprom = unsafe { Eeprom512B::new() };
         assert_err_eq!(
@@ -403,7 +509,10 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(not(eeprom_512b), ignore = "This test requires a 512B EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_512b` to enable.")]
+    #[cfg_attr(
+        not(eeprom_512b),
+        ignore = "This test requires a 512B EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_512b` to enable."
+    )]
     fn full_range_512b() {
         let mut eeprom = unsafe { Eeprom512B::new() };
         let mut writer = eeprom.writer(..);
@@ -439,7 +548,10 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(not(eeprom_512b), ignore = "This test requires a 512B EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_512b` to enable.")]
+    #[cfg_attr(
+        not(eeprom_512b),
+        ignore = "This test requires a 512B EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_512b` to enable."
+    )]
     fn partial_range_512b() {
         let mut eeprom = unsafe { Eeprom512B::new() };
         let mut writer =
@@ -463,9 +575,132 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(not(eeprom_512b), ignore = "This test requires a 512B EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_512b` to enable.")]
+    #[cfg_attr(
+        not(eeprom_512b),
+        ignore = "This test requires a 512B EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_512b` to enable."
+    )]
     fn offset_512b() {
         let mut eeprom = unsafe { Eeprom512B::new() };
+        let mut writer =
+            eeprom.writer(RangedUsize::new_static::<4>()..RangedUsize::new_static::<7>());
+
+        assert_ok_eq!(writer.write(b"abc"), 3);
+        assert_ok!(writer.flush());
+
+        let mut reader =
+            eeprom.reader(RangedUsize::new_static::<4>()..RangedUsize::new_static::<7>());
+        let mut buf = [0; 3];
+
+        assert_ok_eq!(reader.read(&mut buf), 3);
+        assert_eq!(&buf, b"abc");
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(eeprom_8k),
+        ignore = "This test requires a 8KiB EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_8k` to enable."
+    )]
+    fn empty_range_read_8k() {
+        let mut eeprom = unsafe { Eeprom8K::new() };
+        let mut buf = [1, 2, 3, 4];
+
+        assert_ok_eq!(
+            eeprom
+                .reader(RangedUsize::new_static::<0>()..RangedUsize::new_static::<0>())
+                .read(&mut buf),
+            0
+        );
+        assert_eq!(buf, [1, 2, 3, 4]);
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(eeprom_8k),
+        ignore = "This test requires a 8KiB EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_8k` to enable."
+    )]
+    fn empty_range_write_8k() {
+        let mut eeprom = unsafe { Eeprom8K::new() };
+        assert_err_eq!(
+            eeprom
+                .writer(RangedUsize::new_static::<0>()..RangedUsize::new_static::<0>())
+                .write(&[0]),
+            Error::EndOfWriter
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(eeprom_8k),
+        ignore = "This test requires a 8KiB EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_8k` to enable."
+    )]
+    fn full_range_8k() {
+        let mut eeprom = unsafe { Eeprom8K::new() };
+        let mut writer = eeprom.writer(..);
+
+        for i in 0..2048 {
+            assert_ok_eq!(
+                writer.write(&[
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8),
+                ]),
+                4
+            );
+        }
+
+        let mut reader = eeprom.reader(..);
+        let mut buf = [0; 4];
+
+        for i in 0..2048 {
+            assert_ok_eq!(reader.read(&mut buf), 4);
+            assert_eq!(
+                buf,
+                [
+                    0u8.wrapping_add(i as u8),
+                    1u8.wrapping_add(i as u8),
+                    2u8.wrapping_add(i as u8),
+                    3u8.wrapping_add(i as u8),
+                ],
+                "i = {i}"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(eeprom_8k),
+        ignore = "This test requires a 8KiB EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_8k` to enable."
+    )]
+    fn partial_range_8k() {
+        let mut eeprom = unsafe { Eeprom8K::new() };
+        let mut writer =
+            eeprom.writer(RangedUsize::new_static::<42>()..RangedUsize::new_static::<100>());
+
+        assert_ok_eq!(writer.write(&[b'a'; 100]), 58);
+        assert_ok!(writer.flush());
+
+        let mut reader =
+            eeprom.reader(RangedUsize::new_static::<51>()..RangedUsize::new_static::<60>());
+        let mut buf = [0; 20];
+
+        assert_ok_eq!(reader.read(&mut buf), 9);
+        assert_eq!(
+            buf,
+            [
+                b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', b'a', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0
+            ]
+        );
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(eeprom_8k),
+        ignore = "This test requires a 8KiB EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_8k` to enable."
+    )]
+    fn offset_8k() {
+        let mut eeprom = unsafe { Eeprom8K::new() };
         let mut writer =
             eeprom.writer(RangedUsize::new_static::<4>()..RangedUsize::new_static::<7>());
 

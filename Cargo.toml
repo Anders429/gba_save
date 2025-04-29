@@ -22,4 +22,4 @@ mgba_log = "0.2.1"
 more_ranges = "0.1.0"
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(sram)", "cfg(flash_64k)", "cfg(flash_64k_atmel)", "cfg(flash_128k)", "cfg(eeprom_512b)"]}
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(sram)", "cfg(flash_64k)", "cfg(flash_64k_atmel)", "cfg(flash_128k)", "cfg(eeprom_512b)", "cfg(eeprom_8k)"]}

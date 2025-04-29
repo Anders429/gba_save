@@ -133,3 +133,28 @@ jobs:
         success-code: 0  # Pass
       env:
         XDG_CONFIG_HOME: /home/runner/work/gba_save/gba_save/.mgba/eeprom_512b
+
+  test_eeprom_8k:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: rust-src
+    - run: sudo apt-get install binutils-arm-none-eabi
+    - run: cargo test --no-run --message-format=json | tee results.json
+      env:
+        RUSTFLAGS: -Clinker=arm-none-eabi-ld -Clink-arg=-Tgba.ld -Ztrap-unreachable=no --cfg eeprom_8k
+    - run: cargo install parse_test_executable
+    - run: echo "ROM_PATH=$(parse_test_executable results.json)" >> $GITHUB_ENV
+    - run: arm-none-eabi-objcopy -O binary ${{ env.ROM_PATH }} test.gba
+    - run: cargo install gbafix
+    - run: gbafix test.gba
+    - uses: Anders429/github-mgba-rom-test@config
+      with:
+        swi-call: 0x27
+        read-register: 'r0'
+        rom-path: test.gba
+        success-code: 0  # Pass
+      env:
+        XDG_CONFIG_HOME: /home/runner/work/gba_save/gba_save/.mgba/eeprom_8k

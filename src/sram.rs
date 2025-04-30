@@ -1,3 +1,12 @@
+//! SRAM backup memory.
+//!
+//! Unlike other backup memory types, SRAM only comes in a single size: 32KiB. This makes it
+//! simpler to work with than flash or EEPROM, as you don't have to determine what size you are
+//! supporting.
+//!
+//! To interact with SRAM, use the [`Sram`] type to create readers and writers over ranges of SRAM
+//! memory.
+
 use crate::{
     mmio::{Cycles, WAITCNT},
     range::translate_range_to_buffer,

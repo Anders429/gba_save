@@ -14,7 +14,14 @@ use crate::{
     mmio::{Cycles, DmaControl, DMA3_CNT, DMA3_DESTINATION, DMA3_LEN, DMA3_SOURCE, IME, WAITCNT},
     range::translate_range_to_buffer,
 };
-use core::{cmp::min, convert::Infallible, marker::PhantomData, ops::RangeBounds};
+use core::{
+    cmp::min,
+    convert::Infallible,
+    fmt,
+    fmt::{Display, Formatter},
+    marker::PhantomData,
+    ops::RangeBounds,
+};
 use deranged::{OptionRangedUsize, RangedUsize};
 use embedded_io::{ErrorKind, ErrorType, Read, Write};
 
@@ -43,6 +50,18 @@ pub enum Error {
     /// exhausted.
     EndOfWriter,
 }
+
+impl Display for Error {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::OperationTimedOut => "the operation on the EEPROM device timed out",
+            Self::WriteFailure => "unable to verify that data was written correctly",
+            Self::EndOfWriter => "the writer has reached the end of its range",
+        })
+    }
+}
+
+impl core::error::Error for Error {}
 
 impl embedded_io::Error for Error {
     fn kind(&self) -> ErrorKind {

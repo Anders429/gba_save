@@ -49,7 +49,7 @@ impl Read for Reader<'_> {
     }
 }
 
-/// An error that can occur when writing to flash memory.
+/// An error that can occur when writing to SRAM memory.
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
     /// Data written was unable to be verified.

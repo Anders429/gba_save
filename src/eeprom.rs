@@ -16,7 +16,8 @@ const BIT_LEN_8KB: usize = 81;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
-    Timeout,
+    OperationTimedOut,
+    WriteFailure,
     EndOfWriter,
 }
 
@@ -145,7 +146,7 @@ impl Reader<'_> {
             });
 
             // Send to EEPROM
-            write(&bits[..ADDRESS_LEN + 3]);
+            write(&bits[..(ADDRESS_LEN + 3)]);
             // Receive from EEPROM.
             let bits_to_read = read_limit - read_count;
             let offset = unsafe { RangedUsize::new_unchecked(self.address as usize & 0b0000_0111) };
@@ -221,7 +222,7 @@ impl Writer<'_> {
                 }
                 self.index = new_index.into();
                 if new_index.is_none() {
-                    self.flush_unchecked(bits)?;
+                    self.flush_unchecked::<ADDRESS_LEN, BIT_LEN>(bits)?;
                 }
             } else {
                 *bits = [0u16; BIT_LEN];
@@ -240,7 +241,7 @@ impl Writer<'_> {
 
                     // Note that we can ignore the first four bits; they'll be overwritten by the
                     // address in the next step anyway.
-                    read_bits(&mut bits[4..]);
+                    read_bits(&mut bits[(2 + ADDRESS_LEN)..]);
                 }
                 populate_address::<ADDRESS_LEN>(&mut bits[2..], unsafe {
                     self.address.byte_add(write_count)
@@ -260,7 +261,10 @@ impl Writer<'_> {
     ///
     /// Despite the name, this isn't actually unsafe. It just indicates that data might be
     /// overwritten in memory if the internal buffer isn't completely aligned.
-    fn flush_unchecked<const BIT_LEN: usize>(
+    ///
+    /// This also performs data validation, ensuring that the EEPROM returns a "Ready" status and
+    /// that the data written is correct.
+    fn flush_unchecked<const ADDRESS_LEN: usize, const BIT_LEN: usize>(
         &mut self,
         bits: &[u16; BIT_LEN],
     ) -> Result<(), Error> {
@@ -268,10 +272,24 @@ impl Writer<'_> {
         // Wait for the write to succeed.
         for _ in 0..10000 {
             if unsafe { (EEPROM_MEMORY as *mut u16).read_volatile() } & 1 > 0 {
+                // Verify the write.
+                let mut new_bits = [0; 68];
+                new_bits[0] = 1;
+                new_bits[1] = 1;
+                // Copy over the address that was written.
+                for i in 0..ADDRESS_LEN {
+                    new_bits[2 + i] = bits[2 + i];
+                }
+                write(&new_bits[..(ADDRESS_LEN + 3)]);
+                read_bits(&mut new_bits);
+                if bits[(2 + ADDRESS_LEN)..(BIT_LEN - 1)] != new_bits[4..] {
+                    return Err(Error::WriteFailure);
+                }
+
                 return Ok(());
             }
         }
-        Err(Error::Timeout)
+        Err(Error::OperationTimedOut)
     }
 
     fn flush<const ADDRESS_LEN: usize, const BIT_LEN: usize>(
@@ -302,7 +320,7 @@ impl Writer<'_> {
             }
         }
 
-        self.flush_unchecked(bits)
+        self.flush_unchecked::<ADDRESS_LEN, BIT_LEN>(bits)
     }
 }
 
@@ -595,6 +613,21 @@ mod tests {
         assert_eq!(&buf, b"abc");
     }
 
+    // Note that we can't test for `WriteFailure` on mGBA because mGBA automatically coerces writes
+    // from 8KiB to 512B if they are the wrong size. This means we can't actually test that case in
+    // mGBA, because having no EEPROM at all means we will always time out.
+    #[test]
+    #[cfg_attr(
+        any(eeprom_512b, eeprom_8k),
+        ignore = "This test cannot be run with an EEPROM chip. Ensure EEPROM is not configured and don't pass `--cfg eeprom_512b` or `--cfg eeprom_8k` to enable."
+    )]
+    fn timed_out_512b() {
+        let mut eeprom = unsafe { Eeprom512B::new() };
+        let mut writer = eeprom.writer(..);
+
+        assert_err_eq!(writer.write(b"hello, world!"), Error::OperationTimedOut);
+    }
+
     #[test]
     #[cfg_attr(
         not(eeprom_8k),
@@ -645,7 +678,8 @@ mod tests {
                     2u8.wrapping_add(i as u8),
                     3u8.wrapping_add(i as u8),
                 ]),
-                4
+                4,
+                "i = {i}",
             );
         }
 
@@ -713,5 +747,20 @@ mod tests {
 
         assert_ok_eq!(reader.read(&mut buf), 3);
         assert_eq!(&buf, b"abc");
+    }
+
+    // Note that we can't test for `WriteFailure` on mGBA because mGBA automatically coerces writes
+    // from 512B to 8KiB if they are the wrong size. This means we can't actually test that case in
+    // mGBA, because having no EEPROM at all means we will always time out.
+    #[test]
+    #[cfg_attr(
+        any(eeprom_512b, eeprom_8k),
+        ignore = "This test cannot be run with an EEPROM chip. Ensure EEPROM is not configured and don't pass `--cfg eeprom_512b` or `--cfg eeprom_8k` to enable."
+    )]
+    fn timed_out_8k() {
+        let mut eeprom = unsafe { Eeprom8K::new() };
+        let mut writer = eeprom.writer(..);
+
+        assert_err_eq!(writer.write(b"hello, world!"), Error::OperationTimedOut);
     }
 }

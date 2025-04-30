@@ -1,3 +1,15 @@
+//! EEPROM backup memory.
+//!
+//! The GBA has two variants of EEPROM backup:
+//! - 512B
+//! - 8KiB
+//!
+//! The methods for writing to and reading from these variants differs, so you should be deliberate
+//! about which one you use. **Note**: popular emulators such as mGBA will allow writes intended
+//! for one device type to be used on the other; this will not be the case on real hardware.
+//!
+//!
+
 use crate::{
     mmio::{Cycles, DmaControl, DMA3_CNT, DMA3_DESTINATION, DMA3_LEN, DMA3_SOURCE, IME, WAITCNT},
     range::translate_range_to_buffer,
@@ -124,7 +136,7 @@ fn populate_address<const ADDRESS_LEN: usize>(bit_buffer: &mut [u16], address: *
 }
 
 #[derive(Debug)]
-pub struct Reader<'a> {
+struct Reader<'a> {
     address: *mut u8,
     len: usize,
     lifetime: PhantomData<&'a ()>,
@@ -180,7 +192,7 @@ impl Reader<'_> {
 }
 
 #[derive(Debug)]
-pub struct Writer<'a> {
+struct Writer<'a> {
     address: *mut u8,
     len: usize,
     index: OptionRangedUsize<0, 7>,
@@ -338,6 +350,9 @@ impl Writer<'_> {
     }
 }
 
+/// A reader on a 512B EEPROM device.
+///
+/// This type allows reading data over the range specified upon creation.
 #[derive(Debug)]
 pub struct Reader512B<'a> {
     reader: Reader<'a>,
@@ -361,6 +376,9 @@ impl Read for Reader512B<'_> {
     }
 }
 
+/// A writer on a 512B EEPROM device.
+///
+/// This type allows writing data on the range specified upon creation.
 #[derive(Debug)]
 pub struct Writer512B<'a> {
     writer: Writer<'a>,
@@ -392,16 +410,23 @@ impl Write for Writer512B<'_> {
     }
 }
 
+/// An EEPROM device with 512B of storage.
 #[derive(Debug)]
 pub struct Eeprom512B {
     _private: (),
 }
 
 impl Eeprom512B {
+    /// Creates an accessor to the EEPROM 512B backup memory.
+    ///
+    /// # Safety
+    /// Must have exclusive ownership of EEPROM memory, WAITCNT's EEPROM wait control setting, and
+    /// DMA3. Any DMA channels of higher priority should be disabled.
     pub unsafe fn new() -> Self {
         Self { _private: () }
     }
 
+    /// Returns a reader over the given range.
     pub fn reader<'a, 'b, Range>(&'a mut self, range: Range) -> Reader512B<'a>
     where
         Range: RangeBounds<RangedUsize<0, 511>>,
@@ -411,6 +436,7 @@ impl Eeprom512B {
         unsafe { Reader512B::new_unchecked(address, len) }
     }
 
+    /// Returns a writer over the given range.
     pub fn writer<'a, 'b, Range>(&'a mut self, range: Range) -> Writer512B<'a>
     where
         Range: RangeBounds<RangedUsize<0, 511>>,
@@ -421,6 +447,9 @@ impl Eeprom512B {
     }
 }
 
+/// A reader on an 8KiB EEPROM device.
+///
+/// This type allows reading data over the range specified upon creation.
 #[derive(Debug)]
 pub struct Reader8K<'a> {
     reader: Reader<'a>,
@@ -444,6 +473,9 @@ impl Read for Reader8K<'_> {
     }
 }
 
+/// A writer on an 8KiB EEPROM device.
+///
+/// This type allows writing data on the range specified upon creation.
 #[derive(Debug)]
 pub struct Writer8K<'a> {
     writer: Writer<'a>,
@@ -475,16 +507,23 @@ impl Write for Writer8K<'_> {
     }
 }
 
+/// An EEPROM device with 8KiB of storage.
 #[derive(Debug)]
 pub struct Eeprom8K {
     _private: (),
 }
 
 impl Eeprom8K {
+    /// Creates an accessor to the EEPROM 8KiB backup memory.
+    ///
+    /// # Safety
+    /// Must have exclusive ownership of EEPROM memory, WAITCNT's EEPROM wait control setting, and
+    /// DMA3. Any DMA channels of higher priority should be disabled.
     pub unsafe fn new() -> Self {
         Self { _private: () }
     }
 
+    /// Returns a reader over the given range.
     pub fn reader<'a, 'b, Range>(&'a mut self, range: Range) -> Reader8K<'a>
     where
         Range: RangeBounds<RangedUsize<0, 8191>>,
@@ -494,6 +533,7 @@ impl Eeprom8K {
         unsafe { Reader8K::new_unchecked(address, len) }
     }
 
+    /// Returns a writer over the given range.
     pub fn writer<'a, 'b, Range>(&'a mut self, range: Range) -> Writer8K<'a>
     where
         Range: RangeBounds<RangedUsize<0, 8191>>,

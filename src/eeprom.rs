@@ -14,17 +14,30 @@ const LONG_ADDRESS_LEN_8KB: usize = ADDRESS_LEN_8KB + 3;
 const BIT_LEN_512B: usize = 73;
 const BIT_LEN_8KB: usize = 81;
 
+/// An error that can occur when writing to EEPROM memory.
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error {
+    /// The write operation did not complete successfully within the device's timeout window.
+    ///
+    /// For EEPROM, this means the device did not return a "Ready" status.
     OperationTimedOut,
+
+    /// Data written was unable to be verified.
     WriteFailure,
+
+    /// The writer has exhausted all of its space.
+    ///
+    /// This indicates that the range provided when creating the writer has been completely
+    /// exhausted.
     EndOfWriter,
 }
 
 impl embedded_io::Error for Error {
     fn kind(&self) -> ErrorKind {
         match self {
-            _ => todo!(),
+            Self::OperationTimedOut => ErrorKind::TimedOut,
+            Self::WriteFailure => ErrorKind::NotConnected,
+            Self::EndOfWriter => ErrorKind::WriteZero,
         }
     }
 }

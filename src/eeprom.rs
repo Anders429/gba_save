@@ -110,6 +110,7 @@ fn populate_address<const ADDRESS_LEN: usize>(bit_buffer: &mut [u16], address: *
     }
 }
 
+#[derive(Debug)]
 pub struct Reader<'a> {
     address: *mut u8,
     len: usize,
@@ -324,6 +325,7 @@ impl Writer<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Reader512B<'a> {
     reader: Reader<'a>,
 }
@@ -377,6 +379,7 @@ impl Write for Writer512B<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Eeprom512B {
     _private: (),
 }
@@ -405,6 +408,7 @@ impl Eeprom512B {
     }
 }
 
+#[derive(Debug)]
 pub struct Reader8K<'a> {
     reader: Reader<'a>,
 }
@@ -427,6 +431,7 @@ impl Read for Reader8K<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Writer8K<'a> {
     writer: Writer<'a>,
     bits: [u16; BIT_LEN_8KB],
@@ -457,6 +462,7 @@ impl Write for Writer8K<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Eeprom8K {
     _private: (),
 }

@@ -141,6 +141,11 @@ impl Writer<'_> {
         &mut self,
         bits: &mut [u16; BIT_LEN],
     ) -> Result<(), Error> {
+        // Check whether we actually have any data to write.
+        if matches!(self.index.get_primitive(), None | Some(0)) {
+            return Ok(());
+        }
+
         // If the address is not aligned, then we need to make sure we aren't overwriting any
         // trailing data.
         //

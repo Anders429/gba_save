@@ -429,6 +429,13 @@ impl Write for Writer512B<'_> {
     }
 }
 
+impl Drop for Writer512B<'_> {
+    fn drop(&mut self) {
+        // This will swallow any errors.
+        let _ignored_result = self.flush();
+    }
+}
+
 /// An EEPROM device with 512B of storage.
 #[derive(Debug)]
 pub struct Eeprom512B {
@@ -523,6 +530,13 @@ impl Write for Writer8K<'_> {
     fn flush(&mut self) -> Result<(), Self::Error> {
         self.writer
             .flush::<ADDRESS_LEN_8KB, BIT_LEN_8KB>(&mut self.bits)
+    }
+}
+
+impl Drop for Writer8K<'_> {
+    fn drop(&mut self) {
+        // This will swallow any errors.
+        let _ignored_result = self.flush();
     }
 }
 
@@ -624,6 +638,7 @@ mod tests {
                 4
             );
         }
+        drop(writer);
 
         let mut reader = eeprom.reader(..);
         let mut buf = [0; 4];
@@ -655,6 +670,7 @@ mod tests {
 
         assert_ok_eq!(writer.write(&[b'a'; 100]), 58);
         assert_ok!(writer.flush());
+        drop(writer);
 
         let mut reader =
             eeprom.reader(RangedUsize::new_static::<51>()..RangedUsize::new_static::<60>());
@@ -682,6 +698,7 @@ mod tests {
 
         assert_ok_eq!(writer.write(b"abc"), 3);
         assert_ok!(writer.flush());
+        drop(writer);
 
         let mut reader =
             eeprom.reader(RangedUsize::new_static::<4>()..RangedUsize::new_static::<7>());
@@ -760,6 +777,7 @@ mod tests {
                 "i = {i}",
             );
         }
+        drop(writer);
 
         let mut reader = eeprom.reader(..);
         let mut buf = [0; 4];
@@ -791,6 +809,7 @@ mod tests {
 
         assert_ok_eq!(writer.write(&[b'a'; 100]), 58);
         assert_ok!(writer.flush());
+        drop(writer);
 
         let mut reader =
             eeprom.reader(RangedUsize::new_static::<51>()..RangedUsize::new_static::<60>());
@@ -818,6 +837,7 @@ mod tests {
 
         assert_ok_eq!(writer.write(b"abc"), 3);
         assert_ok!(writer.flush());
+        drop(writer);
 
         let mut reader =
             eeprom.reader(RangedUsize::new_static::<4>()..RangedUsize::new_static::<7>());

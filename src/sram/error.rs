@@ -36,3 +36,26 @@ impl embedded_io::Error for Error {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+    use alloc::format;
+    use gba_test::test;
+
+    #[test]
+    fn write_failure_display() {
+        assert_eq!(
+            format!("{}", Error::WriteFailure),
+            "unable to verify that data was written correctly"
+        );
+    }
+
+    #[test]
+    fn end_of_writer_display() {
+        assert_eq!(
+            format!("{}", Error::EndOfWriter),
+            "the writer has reached the end of its range"
+        );
+    }
+}

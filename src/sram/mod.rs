@@ -7,158 +7,22 @@
 //! To interact with SRAM, use the [`Sram`] type to create readers and writers over ranges of SRAM
 //! memory.
 
+mod error;
+mod reader;
+mod writer;
+
+pub use error::Error;
+pub use reader::Reader;
+pub use writer::Writer;
+
 use crate::{
     mmio::{Cycles, WAITCNT},
     range::translate_range_to_buffer,
 };
-use core::{
-    cmp::min,
-    convert::Infallible,
-    fmt,
-    fmt::{Display, Formatter},
-    marker::PhantomData,
-    ops::RangeBounds,
-};
+use core::ops::RangeBounds;
 use deranged::RangedUsize;
-use embedded_io::{ErrorKind, ErrorType, Read, Write};
 
 const SRAM_MEMORY: *mut u8 = 0x0e00_0000 as *mut u8;
-
-/// A reader on SRAM.
-///
-/// This type allows reading data over the range specified upon creation.
-#[derive(Debug)]
-pub struct Reader<'a> {
-    address: *mut u8,
-    len: usize,
-    lifetime: PhantomData<&'a ()>,
-}
-
-impl Reader<'_> {
-    unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
-        Self {
-            address,
-            len,
-            lifetime: PhantomData,
-        }
-    }
-}
-
-impl ErrorType for Reader<'_> {
-    type Error = Infallible;
-}
-
-impl Read for Reader<'_> {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        let mut read_count = 0;
-        loop {
-            if read_count >= min(buf.len(), self.len) {
-                self.address = unsafe { self.address.add(read_count) };
-                self.len -= read_count;
-                return Ok(read_count);
-            }
-
-            unsafe {
-                *buf.get_unchecked_mut(read_count) = self.address.add(read_count).read_volatile();
-            }
-            read_count += 1;
-        }
-    }
-}
-
-/// An error that can occur when writing to SRAM memory.
-#[derive(Debug, Eq, PartialEq)]
-pub enum Error {
-    /// Data written was unable to be verified.
-    WriteFailure,
-
-    /// The writer has exhausted all of its space.
-    ///
-    /// This indicates that the range provided when creating the writer has been completely
-    /// exhausted.
-    EndOfWriter,
-}
-
-impl Display for Error {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
-            Self::WriteFailure => "unable to verify that data was written correctly",
-            Self::EndOfWriter => "the writer has reached the end of its range",
-        })
-    }
-}
-
-impl core::error::Error for Error {}
-
-impl embedded_io::Error for Error {
-    fn kind(&self) -> ErrorKind {
-        match self {
-            Self::WriteFailure => ErrorKind::NotConnected,
-            Self::EndOfWriter => ErrorKind::WriteZero,
-        }
-    }
-}
-
-fn verify_byte(address: *const u8, byte: u8) -> Result<(), Error> {
-    if unsafe { address.read_volatile() } == byte {
-        Ok(())
-    } else {
-        Err(Error::WriteFailure)
-    }
-}
-
-/// A writer on SRAM.
-///
-/// This type allows writing data on the range specified upon creation.
-#[derive(Debug)]
-pub struct Writer<'a> {
-    address: *mut u8,
-    len: usize,
-    lifetime: PhantomData<&'a ()>,
-}
-
-impl Writer<'_> {
-    unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
-        Self {
-            address,
-            len,
-            lifetime: PhantomData,
-        }
-    }
-}
-
-impl ErrorType for Writer<'_> {
-    type Error = Error;
-}
-
-impl Write for Writer<'_> {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        let mut write_count = 0;
-        loop {
-            if write_count >= min(buf.len(), self.len) {
-                if self.len == 0 {
-                    return Err(Error::EndOfWriter);
-                }
-                self.address = unsafe { self.address.add(write_count) };
-                self.len -= write_count;
-                return Ok(write_count);
-            }
-
-            let address = unsafe { self.address.add(write_count) };
-            let byte = unsafe { *buf.get_unchecked(write_count) };
-            unsafe {
-                address.write_volatile(byte);
-            }
-            verify_byte(address, byte)?;
-
-            write_count += 1;
-        }
-    }
-
-    fn flush(&mut self) -> Result<(), Self::Error> {
-        Ok(())
-    }
-}
 
 /// Access to SRAM backup.
 #[derive(Debug)]

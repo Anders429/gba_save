@@ -27,6 +27,7 @@ const SRAM_MEMORY: *mut u8 = 0x0e00_0000 as *mut u8;
 /// A reader on SRAM.
 ///
 /// This type allows reading data over the range specified upon creation.
+#[derive(Debug)]
 pub struct Reader<'a> {
     address: *mut u8,
     len: usize,
@@ -109,6 +110,7 @@ fn verify_byte(address: *const u8, byte: u8) -> Result<(), Error> {
 /// A writer on SRAM.
 ///
 /// This type allows writing data on the range specified upon creation.
+#[derive(Debug)]
 pub struct Writer<'a> {
     address: *mut u8,
     len: usize,
@@ -159,6 +161,7 @@ impl Write for Writer<'_> {
 }
 
 /// Access to SRAM backup.
+#[derive(Debug)]
 pub struct Sram {
     /// As this struct maintains ownership of SRAM memory and WAITCNT's SRAM wait control setting,
     /// we want to make sure it can only be constructed through its `unsafe` `new()` associated

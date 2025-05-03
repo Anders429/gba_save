@@ -2,6 +2,11 @@ use core::{
     fmt,
     fmt::{Display, Formatter},
 };
+#[cfg(feature = "serde")]
+use serde::{
+    de::{Deserialize, Deserializer, Visitor},
+    ser::{Serialize, Serializer},
+};
 
 /// An unknown device ID.
 ///
@@ -13,12 +18,49 @@ use core::{
 /// and therefore cannot know how to interact with it.
 ///
 /// [`Flash`]: gba_save::flash::Flash
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct UnknownDeviceID(pub u16);
 
 impl Display for UnknownDeviceID {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         write!(formatter, "Unknown Device ID: 0x{:04x}", self.0)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for UnknownDeviceID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_newtype_struct("UnknownDeviceID", &self.0)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for UnknownDeviceID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct UnknownDeviceIDVisitor;
+
+        impl<'de> Visitor<'de> for UnknownDeviceIDVisitor {
+            type Value = UnknownDeviceID;
+
+            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+                formatter.write_str("struct UnknownDeviceId")
+            }
+
+            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                u16::deserialize(deserializer).map(|id| UnknownDeviceID(id))
+            }
+        }
+
+        deserializer.deserialize_newtype_struct("UnknownDeviceID", UnknownDeviceIDVisitor)
     }
 }
 
@@ -74,8 +116,14 @@ mod tests {
 
     use super::{Device, UnknownDeviceID};
     use alloc::format;
+    #[cfg(feature = "serde")]
+    use claims::assert_ok;
     use claims::{assert_err_eq, assert_ok_eq};
     use gba_test::test;
+    #[cfg(feature = "serde")]
+    use serde::{Deserialize, Serialize};
+    #[cfg(feature = "serde")]
+    use serde_assert::{Deserializer, Serializer, Token};
 
     #[test]
     fn device_from_MX29L010() {
@@ -165,6 +213,50 @@ mod tests {
         assert_eq!(
             format!("{}", UnknownDeviceID(0x0123)),
             "Unknown Device ID: 0x0123"
+        );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn unknown_device_id_serialize() {
+        let serializer = Serializer::builder().build();
+        assert_ok_eq!(
+            UnknownDeviceID(0x0123).serialize(&serializer),
+            [
+                Token::NewtypeStruct {
+                    name: "UnknownDeviceID",
+                },
+                Token::U16(0x0123)
+            ]
+        );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn unknown_device_id_deserialize() {
+        let mut deserializer = Deserializer::builder([
+            Token::NewtypeStruct {
+                name: "UnknownDeviceID",
+            },
+            Token::U16(0x0123),
+        ])
+        .build();
+        assert_ok_eq!(
+            UnknownDeviceID::deserialize(&mut deserializer),
+            UnknownDeviceID(0x0123)
+        );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn unknown_device_id_serde_roundtrip() {
+        let serializer = Serializer::builder().build();
+        let mut deserializer =
+            Deserializer::builder(assert_ok!(UnknownDeviceID(0x0123).serialize(&serializer)))
+                .build();
+        assert_ok_eq!(
+            UnknownDeviceID::deserialize(&mut deserializer),
+            UnknownDeviceID(0x0123)
         );
     }
 }

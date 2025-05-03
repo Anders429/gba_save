@@ -1,4 +1,7 @@
-use crate::eeprom::{populate_address, read, write, ADDRESS_LEN_512B, ADDRESS_LEN_8KB};
+use crate::{
+    eeprom::{populate_address, read, write, ADDRESS_LEN_512B, ADDRESS_LEN_8KB},
+    log,
+};
 use core::{cmp::min, convert::Infallible, marker::PhantomData};
 use deranged::RangedUsize;
 use embedded_io::{ErrorType, Read};
@@ -69,6 +72,10 @@ pub struct Reader512B<'a> {
 
 impl Reader512B<'_> {
     pub(in crate::eeprom) unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        log::info!(
+            "Creating EEPROM 512B reader at address 0x{:08x?} with length {len}",
+            address as usize
+        );
         Self {
             reader: unsafe { Reader::new_unchecked(address, len) },
         }
@@ -95,6 +102,10 @@ pub struct Reader8K<'a> {
 
 impl Reader8K<'_> {
     pub(in crate::eeprom) unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        log::info!(
+            "Creating EEPROM 8KiB reader at address 0x{:08x?} with length {len}",
+            address as usize
+        );
         Self {
             reader: unsafe { Reader::new_unchecked(address, len) },
         }

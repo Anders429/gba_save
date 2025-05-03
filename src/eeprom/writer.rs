@@ -1,5 +1,8 @@
-use crate::eeprom::{
-    populate_address, read_bits, write, Error, ADDRESS_LEN_512B, ADDRESS_LEN_8KB, EEPROM_MEMORY,
+use crate::{
+    eeprom::{
+        populate_address, read_bits, write, Error, ADDRESS_LEN_512B, ADDRESS_LEN_8KB, EEPROM_MEMORY,
+    },
+    log,
 };
 use core::{cmp::min, marker::PhantomData};
 use deranged::{OptionRangedUsize, RangedUsize};
@@ -185,6 +188,10 @@ pub struct Writer512B<'a> {
 
 impl Writer512B<'_> {
     pub(in crate::eeprom) unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        log::info!(
+            "Creating EEPROM 512B writer at address 0x{:08x?} with length {len}",
+            address as usize
+        );
         Self {
             writer: unsafe { Writer::new_unchecked(address, len) },
             bits: [0; BIT_LEN_512B],
@@ -210,6 +217,13 @@ impl Write for Writer512B<'_> {
 
 impl Drop for Writer512B<'_> {
     fn drop(&mut self) {
+        #[cfg(feature = "log")]
+        match self.writer.index.get_primitive() {
+            Some(index) if index > 0 => {
+                log::warn!("Dropped EEPROM 512B writer without flushing remaining {index} bytes. They will be flushed automatically, but any errors will not be handled.");
+            }
+            _ => {}
+        }
         // This will swallow any errors.
         let _ignored_result = self.flush();
     }
@@ -226,6 +240,10 @@ pub struct Writer8K<'a> {
 
 impl Writer8K<'_> {
     pub(in crate::eeprom) unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        log::info!(
+            "Creating EEPROM 8KiB writer at address 0x{:08x?} with length {len}",
+            address as usize
+        );
         Self {
             writer: unsafe { Writer::new_unchecked(address, len) },
             bits: [0; BIT_LEN_8KB],
@@ -251,6 +269,13 @@ impl Write for Writer8K<'_> {
 
 impl Drop for Writer8K<'_> {
     fn drop(&mut self) {
+        #[cfg(feature = "log")]
+        match self.writer.index.get_primitive() {
+            Some(index) if index > 0 => {
+                log::warn!("Dropped EEPROM 8KiB writer without flushing remaining {index} bytes. They will be flushed automatically, but any errors will not be handled.");
+            }
+            _ => {}
+        }
         // This will swallow any errors.
         let _ignored_result = self.flush();
     }

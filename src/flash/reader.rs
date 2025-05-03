@@ -1,4 +1,7 @@
-use crate::flash::{switch_bank, Bank, FLASH_MEMORY, SIZE_64KB};
+use crate::{
+    flash::{switch_bank, Bank, FLASH_MEMORY, SIZE_64KB},
+    log,
+};
 use core::{cmp::min, convert::Infallible, marker::PhantomData, ptr};
 use embedded_io::{ErrorType, Read};
 
@@ -14,6 +17,10 @@ pub struct Reader64K<'a> {
 
 impl Reader64K<'_> {
     pub(crate) unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        log::info!(
+            "Creating Flash 64KiB reader at address 0x{:08x?} with length {len}",
+            address as usize
+        );
         Self {
             address,
             len,
@@ -57,6 +64,10 @@ pub struct Reader128K<'a> {
 
 impl Reader128K<'_> {
     pub(crate) unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        log::info!(
+            "Creating Flash 128KiB reader at address 0x{:08x?} with length {len}",
+            address as usize
+        );
         let bank = if address < unsafe { FLASH_MEMORY.add(SIZE_64KB) } {
             Bank::_0
         } else {

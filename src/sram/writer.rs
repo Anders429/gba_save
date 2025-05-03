@@ -1,4 +1,4 @@
-use crate::sram::Error;
+use crate::{log, sram::Error};
 use core::{cmp::min, marker::PhantomData};
 use embedded_io::{ErrorType, Write};
 
@@ -22,6 +22,10 @@ pub struct Writer<'a> {
 
 impl Writer<'_> {
     pub(in crate::sram) unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        log::info!(
+            "Creating SRAM writer at address 0x{:08x?} with length {len}",
+            address as usize
+        );
         Self {
             address,
             len,

@@ -1,3 +1,8 @@
+use core::{
+    fmt,
+    fmt::{Display, Formatter},
+};
+
 /// An unknown device ID.
 ///
 /// There are several different common devices used in GBA cartridges for flash data. These devices
@@ -10,6 +15,12 @@
 /// [`Flash`]: gba_save::flash::Flash
 #[derive(Debug, Eq, PartialEq)]
 pub struct UnknownDeviceID(pub u16);
+
+impl Display for UnknownDeviceID {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        write!(formatter, "Unknown Device ID: 0x{:04x}", self.0)
+    }
+}
 
 /// Different flash chip devices, by ID code.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -44,11 +55,25 @@ impl TryFrom<u16> for Device {
     }
 }
 
+impl Display for Device {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::MX29L010 => "Macronix 128KiB (ID: 0x09c2, chip: MX29L010)",
+            Self::LE26FV10N1TS => "Sanyo 128KiB (ID: 0x1362, chip: LE26FV10N1TS)",
+            Self::MN63F805MNP => "Panasonic 64KiB (ID: 0x1b32, chip: MN63F805MNP)",
+            Self::MX29L512 => "Macronix 64KiB (ID: 0x1cc2, chip: MX29L512)",
+            Self::AT29LV512 => "Atmel 64KiB (ID: 0x3d1f, chip: AT29LV512)",
+            Self::LE39FW512 => "SST 64KiB (ID: 0xd4bf, chip: LE39FW512)",
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(non_snake_case)]
 
     use super::{Device, UnknownDeviceID};
+    use alloc::format;
     use claims::{assert_err_eq, assert_ok_eq};
     use gba_test::test;
 
@@ -85,5 +110,61 @@ mod tests {
     #[test]
     fn device_from_unknown() {
         assert_err_eq!(Device::try_from(0xffff), UnknownDeviceID(0xffff));
+    }
+
+    #[test]
+    fn display_MX29L010() {
+        assert_eq!(
+            format!("{}", Device::MX29L010),
+            "Macronix 128KiB (ID: 0x09c2, chip: MX29L010)"
+        );
+    }
+
+    #[test]
+    fn display_LE26FV10N1TS() {
+        assert_eq!(
+            format!("{}", Device::LE26FV10N1TS),
+            "Sanyo 128KiB (ID: 0x1362, chip: LE26FV10N1TS)"
+        );
+    }
+
+    #[test]
+    fn display_MN63F805MNP() {
+        assert_eq!(
+            format!("{}", Device::MN63F805MNP),
+            "Panasonic 64KiB (ID: 0x1b32, chip: MN63F805MNP)"
+        );
+    }
+
+    #[test]
+    fn display_MX29L512() {
+        assert_eq!(
+            format!("{}", Device::MX29L512),
+            "Macronix 64KiB (ID: 0x1cc2, chip: MX29L512)"
+        );
+    }
+
+    #[test]
+    fn display_AT29LV512() {
+        assert_eq!(
+            format!("{}", Device::AT29LV512),
+            "Atmel 64KiB (ID: 0x3d1f, chip: AT29LV512)"
+        );
+    }
+
+    #[test]
+    fn display_LE39FW512() {
+        assert_eq!(
+            format!("{}", Device::LE39FW512),
+            "SST 64KiB (ID: 0xd4bf, chip: LE39FW512)"
+        );
+    }
+
+    #[test]
+    fn display_unknown() {
+        assert_eq!(
+            format!("{}", UnknownDeviceID(0x0123)),
+            "Unknown Device ID: 0x0123"
+        );
     }
 }

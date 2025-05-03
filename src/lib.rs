@@ -11,6 +11,7 @@ pub mod eeprom;
 pub mod flash;
 pub mod sram;
 
+mod log;
 mod mmio;
 mod range;
 

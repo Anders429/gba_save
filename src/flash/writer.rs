@@ -3,6 +3,7 @@ use crate::{
         send_command, switch_bank, verify_byte, verify_bytes, Bank, Command, Error, Reader64K,
         FLASH_MEMORY, SIZE_64KB,
     },
+    log,
     mmio::IME,
 };
 use core::{cmp::min, marker::PhantomData, ptr, time::Duration};
@@ -22,6 +23,10 @@ pub struct Writer64K<'a> {
 
 impl Writer64K<'_> {
     pub(crate) unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        log::info!(
+            "Creating Flash 64KiB writer at address 0x{:08x?} with length {len}",
+            address as usize
+        );
         Self {
             address,
             len,
@@ -79,6 +84,10 @@ pub struct Writer128K<'a> {
 
 impl Writer128K<'_> {
     pub(crate) unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        log::info!(
+            "Creating Flash 128KiB writer at address 0x{:08x?} with length {len}",
+            address as usize
+        );
         let bank = if address < unsafe { FLASH_MEMORY.add(SIZE_64KB) } {
             Bank::_0
         } else {
@@ -153,6 +162,10 @@ pub struct Writer64KAtmel<'a> {
 
 impl Writer64KAtmel<'_> {
     pub(crate) unsafe fn new_unchecked(address: *mut u8, len: usize) -> Self {
+        log::info!(
+            "Creating Flash 64KiB Atmel writer at address 0x{:08x?} with length {len}",
+            address as usize
+        );
         let mut buf = [0xff; 128];
         let mut flushed = true;
 
@@ -256,6 +269,10 @@ impl Write for Writer64KAtmel<'_> {
 
 impl Drop for Writer64KAtmel<'_> {
     fn drop(&mut self) {
+        #[cfg(feature = "log")]
+        if !self.flushed {
+            log::warn!("Dropped Flash Atmel 64KiB writer without flushing remaining {} bytes. They will be flushed automatically, but any errors will not be handled.",  self.address as usize % 128);
+        }
         // This will swallow any errors.
         let _ignored_result = self.flush();
     }

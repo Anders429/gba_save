@@ -57,6 +57,7 @@ pub use reader::{Reader128K, Reader64K};
 pub use writer::{Writer128K, Writer64K, Writer64KAtmel};
 
 use crate::{
+    log,
     mmio::{Cycles, WAITCNT},
     range::translate_range_to_buffer,
 };
@@ -399,6 +400,8 @@ impl Flash {
             send_command(Command::TerminateMode);
             wait(Duration::from_millis(20));
         }
+
+        log::info!("Detected Flash device with ID {device}");
 
         match device {
             Device::AT29LV512 => Ok(Self::Flash64KAtmel(Flash64KAtmel)),

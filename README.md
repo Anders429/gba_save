@@ -3,6 +3,7 @@
 [![GitHub Workflow Status](https://img.shields.io/github/check-runs/Anders429/gba_save/master?label=tests)](https://github.com/Anders429/gba_save/actions?query=branch%3Amaster)
 [![crates.io](https://img.shields.io/crates/v/gba_save)](https://crates.io/crates/gba_save)
 [![docs.rs](https://docs.rs/gba_save/badge.svg)](https://docs.rs/gba_save)
+[![License](https://img.shields.io/crates/l/gba_save)](#license)
 
 Tools for interacting with backup media on Game Boy Advance cartridges.
 
@@ -41,3 +42,18 @@ See the documentation for more details and examples for interacting with SRAM an
 - **`log`**: Enable log messages using the [`log`](https://crates.io/crates/log) library.
 Helpful for development. This is best used when paired with a logger like [`mgba_log`](https://crates.io/crates/mgba_log) or
 [`nocash_gba_log`](https://crates.io/crates/nocash_gba_log).
+
+## License
+This project is licensed under either of
+
+* Apache License, Version 2.0
+([LICENSE-APACHE](https://github.com/Anders429/gba_save/blob/HEAD/LICENSE-APACHE) or
+http://www.apache.org/licenses/LICENSE-2.0)
+* MIT license
+([LICENSE-MIT](https://github.com/Anders429/gba_save/blob/HEAD/LICENSE-MIT) or
+http://opensource.org/licenses/MIT)
+
+at your option.
+
+### Contribution
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

@@ -47,7 +47,8 @@
 //! - **`serde`**: Enable serializing and deserializing the variuos error types using the
 //! [`serde`](https://docs.rs/serde/latest/serde/) library.
 //! - **`log`**: Enable log messages using the [`log`](https://docs.rs/log/latest/log/) library.
-//! Helpful for development. This is best used when paired with a logger like [`mgba_log`] or
+//! Helpful for development. This is best used when paired with a logger like
+//! [`mgba_log`](https://docs.rs/mgba_log/latest/mgba_log/) or
 //! [`nocash_gba_log`](https://docs.rs/nocash_gba_log/latest/nocash_gba_log/).
 //!
 //! [`RangedUsize`]: deranged::RangedUsize

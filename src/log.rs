@@ -1,3 +1,8 @@
+//! Wrappers around log macros.
+//!
+//! These allow logging within the crate without having to sprinkle `#[cfg(feature = "log")]` all
+//! over the place.
+
 macro_rules! info {
     ($($tokens:tt)*) => {
         #[cfg(feature = "log")]

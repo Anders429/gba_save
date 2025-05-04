@@ -17,36 +17,36 @@ use serde::{
 /// An unknown device ID indicates that the driver cannot tell what type of device is installed,
 /// and therefore cannot know how to interact with it.
 ///
-/// [`Flash`]: gba_save::flash::Flash
+/// [`Flash`]: crate::flash::Flash
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct UnknownDeviceID(pub u16);
+pub struct UnknownDeviceId(pub u16);
 
-impl Display for UnknownDeviceID {
+impl Display for UnknownDeviceId {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         write!(formatter, "Unknown Device ID: 0x{:04x}", self.0)
     }
 }
 
 #[cfg(feature = "serde")]
-impl Serialize for UnknownDeviceID {
+impl Serialize for UnknownDeviceId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        serializer.serialize_newtype_struct("UnknownDeviceID", &self.0)
+        serializer.serialize_newtype_struct("UnknownDeviceId", &self.0)
     }
 }
 
 #[cfg(feature = "serde")]
-impl<'de> Deserialize<'de> for UnknownDeviceID {
+impl<'de> Deserialize<'de> for UnknownDeviceId {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        struct UnknownDeviceIDVisitor;
+        struct UnknownDeviceIdVisitor;
 
-        impl<'de> Visitor<'de> for UnknownDeviceIDVisitor {
-            type Value = UnknownDeviceID;
+        impl<'de> Visitor<'de> for UnknownDeviceIdVisitor {
+            type Value = UnknownDeviceId;
 
             fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
                 formatter.write_str("struct UnknownDeviceId")
@@ -56,11 +56,11 @@ impl<'de> Deserialize<'de> for UnknownDeviceID {
             where
                 D: Deserializer<'de>,
             {
-                u16::deserialize(deserializer).map(|id| UnknownDeviceID(id))
+                u16::deserialize(deserializer).map(|id| UnknownDeviceId(id))
             }
         }
 
-        deserializer.deserialize_newtype_struct("UnknownDeviceID", UnknownDeviceIDVisitor)
+        deserializer.deserialize_newtype_struct("UnknownDeviceId", UnknownDeviceIdVisitor)
     }
 }
 
@@ -82,7 +82,7 @@ pub(crate) enum Device {
 }
 
 impl TryFrom<u16> for Device {
-    type Error = UnknownDeviceID;
+    type Error = UnknownDeviceId;
 
     fn try_from(id: u16) -> Result<Self, Self::Error> {
         match id {
@@ -92,7 +92,7 @@ impl TryFrom<u16> for Device {
             0x1cc2 => Ok(Device::MX29L512),
             0x3d1f => Ok(Device::AT29LV512),
             0xd4bf => Ok(Device::LE39FW512),
-            _ => Err(UnknownDeviceID(id)),
+            _ => Err(UnknownDeviceId(id)),
         }
     }
 }
@@ -114,7 +114,7 @@ impl Display for Device {
 mod tests {
     #![allow(non_snake_case)]
 
-    use super::{Device, UnknownDeviceID};
+    use super::{Device, UnknownDeviceId};
     use alloc::format;
     #[cfg(feature = "serde")]
     use claims::assert_ok;
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn device_from_unknown() {
-        assert_err_eq!(Device::try_from(0xffff), UnknownDeviceID(0xffff));
+        assert_err_eq!(Device::try_from(0xffff), UnknownDeviceId(0xffff));
     }
 
     #[test]
@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn display_unknown() {
         assert_eq!(
-            format!("{}", UnknownDeviceID(0x0123)),
+            format!("{}", UnknownDeviceId(0x0123)),
             "Unknown Device ID: 0x0123"
         );
     }
@@ -221,10 +221,10 @@ mod tests {
     fn unknown_device_id_serialize() {
         let serializer = Serializer::builder().build();
         assert_ok_eq!(
-            UnknownDeviceID(0x0123).serialize(&serializer),
+            UnknownDeviceId(0x0123).serialize(&serializer),
             [
                 Token::NewtypeStruct {
-                    name: "UnknownDeviceID",
+                    name: "UnknownDeviceId",
                 },
                 Token::U16(0x0123)
             ]
@@ -236,14 +236,14 @@ mod tests {
     fn unknown_device_id_deserialize() {
         let mut deserializer = Deserializer::builder([
             Token::NewtypeStruct {
-                name: "UnknownDeviceID",
+                name: "UnknownDeviceId",
             },
             Token::U16(0x0123),
         ])
         .build();
         assert_ok_eq!(
-            UnknownDeviceID::deserialize(&mut deserializer),
-            UnknownDeviceID(0x0123)
+            UnknownDeviceId::deserialize(&mut deserializer),
+            UnknownDeviceId(0x0123)
         );
     }
 
@@ -252,11 +252,11 @@ mod tests {
     fn unknown_device_id_serde_roundtrip() {
         let serializer = Serializer::builder().build();
         let mut deserializer =
-            Deserializer::builder(assert_ok!(UnknownDeviceID(0x0123).serialize(&serializer)))
+            Deserializer::builder(assert_ok!(UnknownDeviceId(0x0123).serialize(&serializer)))
                 .build();
         assert_ok_eq!(
-            UnknownDeviceID::deserialize(&mut deserializer),
-            UnknownDeviceID(0x0123)
+            UnknownDeviceId::deserialize(&mut deserializer),
+            UnknownDeviceId(0x0123)
         );
     }
 }

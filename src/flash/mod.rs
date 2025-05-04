@@ -51,7 +51,7 @@ mod error;
 mod reader;
 mod writer;
 
-pub use device::UnknownDeviceID;
+pub use device::UnknownDeviceId;
 pub use error::Error;
 pub use reader::{Reader128K, Reader64K};
 pub use writer::{Writer128K, Writer64K, Writer64KAtmel};
@@ -376,7 +376,7 @@ impl Flash {
     /// # Safety
     /// Must have exclusive ownership of both flash RAM memory and WAITCNT's SRAM wait control
     /// setting for the duration of its lifetime.
-    pub unsafe fn new() -> Result<Self, UnknownDeviceID> {
+    pub unsafe fn new() -> Result<Self, UnknownDeviceId> {
         let mut waitstate_control = unsafe { WAITCNT.read_volatile() };
         waitstate_control.set_backup_waitstate(Cycles::_8);
         unsafe { WAITCNT.write_volatile(waitstate_control) };
@@ -422,7 +422,7 @@ impl Flash {
 
 #[cfg(test)]
 mod tests {
-    use super::{wait, Error, Flash, UnknownDeviceID};
+    use super::{wait, Error, Flash, UnknownDeviceId};
     use claims::{assert_err_eq, assert_ok, assert_ok_eq};
     use core::time::Duration;
     use deranged::{RangedU8, RangedUsize};
@@ -941,7 +941,7 @@ mod tests {
         ignore = "This test cannot be run with a Flash chip. Ensure Flash is not configured and do not pass `--cfg flash_64k`, `--cfg flash_64k_atmel`, or `--cfg flash_128k` to enable."
     )]
     fn new_unknown() {
-        assert_err_eq!(unsafe { Flash::new() }, UnknownDeviceID(0xffff));
+        assert_err_eq!(unsafe { Flash::new() }, UnknownDeviceId(0xffff));
     }
 
     #[test]

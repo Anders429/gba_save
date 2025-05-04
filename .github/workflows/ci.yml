@@ -88,7 +88,7 @@ jobs:
       with:
         components: rust-src
     - run: sudo apt-get install binutils-arm-none-eabi
-    - run: cargo test --features serde,log --no-run --message-format=json | tee results.json
+    - run: cargo test --all-features --no-run --message-format=json | tee results.json
     - run: cargo install parse_test_executable
     - run: echo "ROM_PATH=$(parse_test_executable results.json)" >> $GITHUB_ENV
     - run: arm-none-eabi-objcopy -O binary ${{ env.ROM_PATH }} test.gba

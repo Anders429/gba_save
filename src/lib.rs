@@ -25,7 +25,7 @@
 //! use gba_save::sram::Sram;
 //!
 //! let mut sram = unsafe {Sram::new()};
-//! let mut writer = sram.writer(RangedUsize::new_static<0>()..RangedUsize::new_static<15>());
+//! let mut writer = sram.writer(RangedUsize::new_static::<0>()..RangedUsize::new_static::<15>());
 //!
 //! // Write some data.
 //! //
@@ -36,7 +36,7 @@
 //! writer.write(b"123").expect("could not write to SRAM");
 //!
 //! // Read the data back.
-//! let mut reader = sram.reader(RangedUsize::new_static<0>()..RangedUsize::new_static<15>());
+//! let mut reader = sram.reader(RangedUsize::new_static::<0>()..RangedUsize::new_static::<15>());
 //! let mut buffer = [0; 16];
 //! assert_eq!(reader.read(&mut buf), 16);
 //! // Both things that were written will be read back.

@@ -1,6 +1,6 @@
 use crate::{
     eeprom::{
-        populate_address, read_bits, write, Error, ADDRESS_LEN_512B, ADDRESS_LEN_8KB, EEPROM_MEMORY,
+        populate_address, read_bits, write, Error, ADDRESS_LEN_512B, ADDRESS_LEN_8KB, EEPROM_ACCESS,
     },
     log,
 };
@@ -119,7 +119,7 @@ impl Writer<'_> {
         write(bits);
         // Wait for the write to succeed.
         for _ in 0..10000 {
-            if unsafe { (EEPROM_MEMORY as *mut u16).read_volatile() } & 1 > 0 {
+            if unsafe { (EEPROM_ACCESS as *mut u16).read_volatile() } & 1 > 0 {
                 // Verify the write.
                 let mut new_bits = [0; 68];
                 new_bits[0] = 1;

@@ -24,6 +24,7 @@ use core::ops::RangeBounds;
 use deranged::RangedUsize;
 
 const EEPROM_MEMORY: *mut u8 = 0x0D00_0000 as *mut u8;
+const EEPROM_ACCESS: *mut u8 = 0x0DFF_FF00 as *mut u8;
 const ADDRESS_LEN_512B: usize = 6;
 const ADDRESS_LEN_8KB: usize = 14;
 
@@ -42,7 +43,7 @@ fn write(bits: &[u16]) {
         waitcnt.set_eeprom_waitstate(Cycles::_8);
         WAITCNT.write_volatile(waitcnt);
 
-        DMA3_DESTINATION.write_volatile(EEPROM_MEMORY as *mut u16);
+        DMA3_DESTINATION.write_volatile(EEPROM_ACCESS as *mut u16);
         DMA3_SOURCE.write_volatile(bits.as_ptr());
         DMA3_LEN.write_volatile(bits.len() as u16);
         DMA3_CNT.write_volatile(DmaControl::new().enable());
@@ -67,7 +68,7 @@ fn read_bits(buf: &mut [u16]) {
 
         // Read bits using DMA3.
         DMA3_DESTINATION.write_volatile(buf.as_mut_ptr());
-        DMA3_SOURCE.write_volatile(EEPROM_MEMORY as *mut u16);
+        DMA3_SOURCE.write_volatile(EEPROM_ACCESS as *mut u16);
         DMA3_LEN.write_volatile(68);
         DMA3_CNT.write_volatile(DmaControl::new().enable());
 

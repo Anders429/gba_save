@@ -43,15 +43,6 @@ impl embedded_io::Error for Error {
     }
 }
 
-impl From<embedded_io::ReadExactError<Error>> for Error {
-    fn from(read_exact_error: embedded_io::ReadExactError<Error>) -> Self {
-        match read_exact_error {
-            embedded_io::ReadExactError::UnexpectedEof => Self::EndOfWriter,
-            embedded_io::ReadExactError::Other(error) => error,
-        }
-    }
-}
-
 #[cfg(feature = "serde")]
 impl Serialize for Error {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -276,21 +267,5 @@ mod tests {
         let mut deserializer =
             Deserializer::builder(assert_ok!(Error::EndOfWriter.serialize(&serializer))).build();
         assert_ok_eq!(Error::deserialize(&mut deserializer), Error::EndOfWriter);
-    }
-
-    #[test]
-    fn read_exact_error_end_of_file_into_error() {
-        assert_eq!(
-            Error::from(embedded_io::ReadExactError::UnexpectedEof),
-            Error::EndOfWriter
-        );
-    }
-
-    #[test]
-    fn read_exact_error_other_into_error() {
-        assert_eq!(
-            Error::from(embedded_io::ReadExactError::Other(Error::OperationTimedOut)),
-            Error::OperationTimedOut
-        );
     }
 }

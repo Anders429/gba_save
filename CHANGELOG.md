@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 - 2025-09-24
+## 0.2.0 - 2025-09-24 [YANKED]
 ### Added
 - All error types now implement `From<embedded_io::ReadExactError>`, converting `ReadExactError::UnexpectedEof` into `Error::EndOfWriter` for each of the various error types.
 

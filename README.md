@@ -11,7 +11,8 @@ The Game Boy Advance has three forms of backup media for saving data: SRAM, EEPR
 
 ## Example Usage
 To write and read save data using SRAM, use something like the following:
-```
+
+``` rust
 use deranged::RangedUsize;
 use embedded_io::{Read, Write};
 use gba_save::sram::Sram;

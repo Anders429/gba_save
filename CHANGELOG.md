@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0 - 2025-09-24
+### Added
+- All error types now implement `From<embedded_io::ReadExactError>`, converting `ReadExactError::UnexpectedEof` into `Error::EndOfWriter` for each of the various error types.
+
 ## 0.1.1 - 2025-08-30
 ### Changed
 - EEPROM is now accessed at 0x0DFFFF00 instead of 0x0D000000, allowing better operation with 32MiB ROM sizes.

@@ -27,6 +27,8 @@ impl Display for UnknownDeviceId {
     }
 }
 
+impl core::error::Error for UnknownDeviceId {}
+
 #[cfg(feature = "serde")]
 impl Serialize for UnknownDeviceId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

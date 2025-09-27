@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+### Added
+- `flash::device::UnknownDeviceId` now implements `core::error::Error`.
+
 ## 0.3.0 - 2025-09-26
 ### Changed
 - Now requiring the 2024 edition of Rust.

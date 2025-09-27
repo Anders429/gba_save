@@ -1,5 +1,5 @@
 use crate::{
-    flash::{switch_bank, Bank, FLASH_MEMORY, SIZE_64KB},
+    flash::{Bank, FLASH_MEMORY, SIZE_64KB, switch_bank},
     log,
 };
 use core::{cmp::min, convert::Infallible, marker::PhantomData, ptr};

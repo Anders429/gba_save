@@ -53,8 +53,8 @@ mod writer;
 
 pub use device::UnknownDeviceId;
 pub use error::Error;
-pub use reader::{Reader128K, Reader64K};
-pub use writer::{Writer128K, Writer64K, Writer64KAtmel};
+pub use reader::{Reader64K, Reader128K};
+pub use writer::{Writer64K, Writer64KAtmel, Writer128K};
 
 use crate::{
     log,
@@ -422,7 +422,7 @@ impl Flash {
 
 #[cfg(test)]
 mod tests {
-    use super::{wait, Error, Flash, UnknownDeviceId};
+    use super::{Error, Flash, UnknownDeviceId, wait};
     use claims::{assert_err_eq, assert_ok, assert_ok_eq};
     use core::time::Duration;
     use deranged::{RangedU8, RangedUsize};

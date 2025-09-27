@@ -1,7 +1,7 @@
 use crate::{
     flash::{
-        send_command, switch_bank, verify_byte, verify_bytes, Bank, Command, Error, Reader64K,
-        FLASH_MEMORY, SIZE_64KB,
+        Bank, Command, Error, FLASH_MEMORY, Reader64K, SIZE_64KB, send_command, switch_bank,
+        verify_byte, verify_bytes,
     },
     log,
     mmio::IME,
@@ -269,9 +269,11 @@ impl Write for Writer64KAtmel<'_> {
 
 impl Drop for Writer64KAtmel<'_> {
     fn drop(&mut self) {
-        #[cfg(feature = "log")]
         if !self.flushed {
-            log::warn!("Dropped Flash Atmel 64KiB writer without flushing remaining {} bytes. They will be flushed automatically, but any errors will not be handled.",  self.address as usize % 128);
+            log::warn!(
+                "Dropped Flash Atmel 64KiB writer without flushing remaining {} bytes. They will be flushed automatically, but any errors will not be handled.",
+                self.address as usize % 128
+            );
         }
         // This will swallow any errors.
         let _ignored_result = self.flush();

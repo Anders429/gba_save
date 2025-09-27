@@ -13,11 +13,11 @@ mod reader;
 mod writer;
 
 pub use error::Error;
-pub use reader::{Reader512B, Reader8K};
-pub use writer::{Writer512B, Writer8K};
+pub use reader::{Reader8K, Reader512B};
+pub use writer::{Writer8K, Writer512B};
 
 use crate::{
-    mmio::{Cycles, DmaControl, DMA3_CNT, DMA3_DESTINATION, DMA3_LEN, DMA3_SOURCE, IME, WAITCNT},
+    mmio::{Cycles, DMA3_CNT, DMA3_DESTINATION, DMA3_LEN, DMA3_SOURCE, DmaControl, IME, WAITCNT},
     range::translate_range_to_buffer,
 };
 use core::ops::RangeBounds;
@@ -185,7 +185,7 @@ impl Eeprom8K {
 
 #[cfg(test)]
 mod tests {
-    use super::{Eeprom512B, Eeprom8K, Error};
+    use super::{Eeprom8K, Eeprom512B, Error};
     use claims::{assert_err_eq, assert_ok, assert_ok_eq};
     use deranged::RangedUsize;
     use embedded_io::{Read, Write};
@@ -331,6 +331,46 @@ mod tests {
 
     #[test]
     #[cfg_attr(
+        not(eeprom_512b),
+        ignore = "This test requires a 512B EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_512b` to enable."
+    )]
+    fn flush_then_write_512b() {
+        let mut eeprom = unsafe { Eeprom512B::new() };
+        let mut writer = eeprom.writer(..);
+
+        assert_ok_eq!(writer.write(b"abc"), 3);
+        assert_ok!(writer.flush());
+        assert_ok_eq!(writer.write(b"def"), 3);
+        drop(writer);
+
+        let mut reader = eeprom.reader(..);
+        let mut buf = [0; 6];
+        assert_ok_eq!(reader.read(&mut buf), 6);
+        assert_eq!(&buf, b"abcdef");
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(eeprom_512b),
+        ignore = "This test requires a 512B EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_512b` to enable."
+    )]
+    fn offset_read_across_boundary_512b() {
+        let mut eeprom = unsafe { Eeprom512B::new() };
+        let mut writer = eeprom.writer(RangedUsize::new_static::<7>()..);
+
+        assert_ok_eq!(writer.write(b"abcdef"), 6);
+        assert_ok!(writer.flush());
+        drop(writer);
+
+        let mut reader = eeprom.reader(RangedUsize::new_static::<7>()..);
+        let mut buf = [0; 3];
+
+        assert_ok_eq!(reader.read(&mut buf), 3);
+        assert_eq!(buf, *b"abc",);
+    }
+
+    #[test]
+    #[cfg_attr(
         not(eeprom_8k),
         ignore = "This test requires a 8KiB EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_8k` to enable."
     )]
@@ -466,5 +506,48 @@ mod tests {
         let mut writer = eeprom.writer(..);
 
         assert_err_eq!(writer.write(b"hello, world!"), Error::OperationTimedOut);
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(eeprom_8k),
+        ignore = "This test requires a 8KiB EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_8k` to enable."
+    )]
+    fn flush_then_write_8k() {
+        let mut eeprom = unsafe { Eeprom8K::new() };
+        let mut writer = eeprom.writer(..);
+
+        assert_ok_eq!(writer.write(b"abc"), 3);
+        assert_ok!(writer.flush());
+        assert_ok_eq!(writer.write(b"def"), 3);
+        drop(writer);
+
+        let mut reader = eeprom.reader(..);
+        let mut buf = [0; 6];
+        assert_ok_eq!(reader.read(&mut buf), 6);
+        assert_eq!(&buf, b"abcdef");
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(eeprom_8k),
+        ignore = "This test requires a 8KiB EEPROM chip. Ensure EEPROM is configured and pass `--cfg eeprom_8k` to enable."
+    )]
+    fn offset_read_across_boundary_8k() {
+        let mut eeprom = unsafe { Eeprom8K::new() };
+        let mut writer = eeprom.writer(RangedUsize::new_static::<7>()..);
+
+        assert_ok_eq!(writer.write(b"abcdef"), 6);
+        assert_ok!(writer.flush());
+        drop(writer);
+
+        let mut reader = eeprom.reader(RangedUsize::new_static::<7>()..);
+        let mut buf = [0; 3];
+
+        assert_ok_eq!(reader.read(&mut buf), 3);
+        assert_eq!(buf, *b"abc",);
+
+        assert_ok_eq!(reader.read(&mut buf), 3);
+        assert_eq!(buf, *b"def",);
     }
 }

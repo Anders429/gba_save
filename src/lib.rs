@@ -73,7 +73,7 @@ mod mmio;
 mod range;
 
 #[cfg(test)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub fn main() {
     let _ = mgba_log::init();
     test_harness()

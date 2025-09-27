@@ -22,6 +22,5 @@ macro_rules! _warn {
     }
 }
 
-#[cfg(feature = "log")]
 pub(crate) use _warn as warn;
 pub(crate) use info;

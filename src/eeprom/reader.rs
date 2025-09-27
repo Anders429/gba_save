@@ -1,5 +1,5 @@
 use crate::{
-    eeprom::{populate_address, read, write, ADDRESS_LEN_512B, ADDRESS_LEN_8KB},
+    eeprom::{ADDRESS_LEN_8KB, ADDRESS_LEN_512B, populate_address, read, write},
     log,
 };
 use core::{cmp::min, convert::Infallible, marker::PhantomData};
@@ -27,37 +27,36 @@ impl Reader<'_> {
 
         // Read in chunks of 8 bytes.
         let mut read_count = 0;
+        let read_limit = min(buf.len(), self.len);
         loop {
-            let read_limit = min(buf.len(), self.len);
             if read_count >= read_limit {
-                self.address = unsafe { self.address.add(read_count) };
-                self.len -= read_count;
                 return Ok(read_count);
             }
 
             // Request a read of EEPROM data.
             bits[0] = 1;
             bits[1] = 1;
-            populate_address::<ADDRESS_LEN>(&mut bits[2..], unsafe {
-                self.address.byte_add(read_count)
-            });
+            populate_address::<ADDRESS_LEN>(&mut bits[2..], self.address);
 
             // Send to EEPROM
             write(&bits[..(ADDRESS_LEN + 3)]);
             // Receive from EEPROM.
-            let bits_to_read = read_limit - read_count;
+            let bytes_to_read = read_limit - read_count;
             let offset = unsafe { RangedUsize::new_unchecked(self.address as usize & 0b0000_0111) };
-            if bits_to_read < (8 - offset.get()) {
+            if bytes_to_read < (8 - offset.get()) {
                 read(
                     bits,
-                    &mut buf[read_count..(read_count + bits_to_read)],
+                    &mut buf[read_count..(read_count + bytes_to_read)],
                     offset,
                 );
             } else {
                 read(bits, &mut buf[read_count..], offset);
             }
 
-            read_count += min(8 - offset.get(), bits_to_read);
+            let amount_read = min(8 - offset.get(), bytes_to_read);
+            read_count += amount_read;
+            self.address = unsafe { self.address.byte_add(amount_read) };
+            self.len -= amount_read;
         }
     }
 }

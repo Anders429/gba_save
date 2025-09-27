@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 - 2025-09-26
+### Changed
+- Now requiring the 2024 edition of Rust.
+### Fixed
+- Unaligned EEPROM writes now correctly preserve data that is already written.
+- Flushing EEPROM when the internal buffer location is not aligned now correctly updates the writer's state.
+- Flushing EEPROM now sends a correct read request when loading unaligned data.
+- EEPROM Reading across alignment boundaries now advances to the next address in all cases.
+
 ## 0.2.0 - 2025-09-24 [YANKED]
 ### Added
 - All error types now implement `From<embedded_io::ReadExactError>`, converting `ReadExactError::UnexpectedEof` into `Error::EndOfWriter` for each of the various error types.

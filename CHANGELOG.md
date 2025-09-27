@@ -3,6 +3,8 @@
 ## Unreleased
 ### Added
 - `flash::device::UnknownDeviceId` now implements `core::error::Error`.
+### Fixed
+- Disable flush check on drop for EEPROM and 64KiB Atmel Flash writers when failures occur due to to a problem with the device.
 
 ## 0.3.0 - 2025-09-26
 ### Changed

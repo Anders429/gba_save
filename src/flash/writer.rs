@@ -228,6 +228,8 @@ impl Write for Writer64KAtmel<'_> {
             return Ok(());
         }
 
+        self.flushed = true;
+
         // Read any remaining bytes at the back of the buffer.
         let offset = self.address as usize % 128;
         if offset != 0 {
@@ -262,7 +264,6 @@ impl Write for Writer64KAtmel<'_> {
 
         verify_bytes(offset_address, &self.buf, Duration::from_millis(20))?;
 
-        self.flushed = true;
         Ok(())
     }
 }

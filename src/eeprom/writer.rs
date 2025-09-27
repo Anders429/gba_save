@@ -104,6 +104,7 @@ impl Writer<'_> {
         bits: &mut [u16; BIT_LEN],
     ) -> Result<(), Error> {
         write(bits);
+        self.dirty = false;
         // Wait for the write to succeed.
         for _ in 0..10000 {
             if unsafe { (EEPROM_ACCESS as *mut u16).read_volatile() } & 1 > 0 {
@@ -123,7 +124,6 @@ impl Writer<'_> {
 
                 // Populate the new address before completing.
                 populate_address::<ADDRESS_LEN>(&mut bits[2..], self.address);
-                self.dirty = false;
 
                 return Ok(());
             }

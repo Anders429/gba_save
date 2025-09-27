@@ -39,7 +39,7 @@ assert_eq!(buffer, b"hello, world!123");
 See the documentation for more details and examples for interacting with SRAM and the other backup media types.
 
 ## Optional Features
-- **`serde`**: Enable serializing and deserializing the variuos error types using the [`serde`](https://crates.io/crates/serde) library.
+- **`serde`**: Enable serializing and deserializing the various error types using the [`serde`](https://crates.io/crates/serde) library.
 - **`log`**: Enable log messages using the [`log`](https://crates.io/crates/log) library.
 Helpful for development. This is best used when paired with a logger like [`mgba_log`](https://crates.io/crates/mgba_log) or
 [`nocash_gba_log`](https://crates.io/crates/nocash_gba_log).

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2025-09-27
 ### Added
 - `flash::device::UnknownDeviceId` now implements `core::error::Error`.
 ### Fixed

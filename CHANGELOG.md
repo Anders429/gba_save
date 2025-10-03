@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0 - 2025-10-02
+### Changed
+- Upgraded to `embedded-io` version `0.7.1`.
+
 ## 0.4.0 - 2025-09-27
 ### Added
 - `flash::device::UnknownDeviceId` now implements `core::error::Error`.

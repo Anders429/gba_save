@@ -15,6 +15,7 @@ use embedded_io::{ErrorType, Read, Write};
 ///
 /// If the memory being written to has been written to previously without being erased, the writes
 /// will not succeed.
+#[derive(Debug)]
 pub struct Writer64K<'a> {
     address: *mut u8,
     len: usize,
@@ -75,6 +76,7 @@ impl Write for Writer64K<'_> {
 ///
 /// If the memory being written to has been written to previously without being erased, the writes
 /// will not succeed.
+#[derive(Debug)]
 pub struct Writer128K<'a> {
     address: *mut u8,
     len: usize,

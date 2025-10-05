@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0 - 2025-10-04
+### Added
+- `flash::Writer64K` and `flash::Writer128K` now implement `Debug`.
+
 ## 0.5.0 - 2025-10-02
 ### Changed
 - Upgraded to `embedded-io` version `0.7.1`.
